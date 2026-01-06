@@ -4,11 +4,11 @@ This module provides a command-line interface for downloading, extracting,
 and searching CVE data from the cvelistV5 repository.
 
 Usage:
-    cve download [--years N]    Download CVE data
-    cve extract [--years N]     Extract CVE data to Parquet
-    cve search <query>          Search CVEs
-    cve get <cve-id>            Get details for a specific CVE
-    cve stats                   Show database statistics
+    cvec download [--years N]    Download CVE data
+    cvec extract [--years N]     Extract CVE data to Parquet
+    cvec search <query>          Search CVEs
+    cvec get <cve-id>            Get details for a specific CVE
+    cvec stats                   Show database statistics
 """
 
 import json
@@ -34,7 +34,7 @@ from cvec.services.search import (
 CVE_ID_PATTERN = re.compile(r"^CVE-\d{4}-\d{4,}$", re.IGNORECASE)
 
 app = typer.Typer(
-    name="cve",
+    name="cvec",
     help="CVE analysis tool for LLM agents",
     no_args_is_help=True,
 )
@@ -764,7 +764,7 @@ def stats(
         statistics = service.stats()
     except FileNotFoundError:
         console.print(
-            "[red]No data found. Run 'cve download' and 'cve extract' first.[/red]"
+            "[red]No data found. Run 'cvec download' and 'cvec extract' first.[/red]"
         )
         raise typer.Exit(1)
 

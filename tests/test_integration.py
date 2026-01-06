@@ -207,7 +207,7 @@ class TestSearchWithRealData:
         """Get config pointing to real data directory."""
         config = Config()
         if not config.cves_parquet.exists():
-            pytest.skip("Real CVE data not available - run 'cve extract' first")
+            pytest.skip("Real CVE data not available - run 'cvec extract' first")
         # Check if the parquet has the new schema by looking for cve_id column
         import polars as pl
 
@@ -216,7 +216,7 @@ class TestSearchWithRealData:
             if "cve_id" not in df.columns:
                 pytest.skip(
                     "Real CVE data is in old schema format - "
-                    "run 'cve extract' to regenerate"
+                    "run 'cvec extract' to regenerate"
                 )
         except Exception:
             pytest.skip("Error reading parquet file")
