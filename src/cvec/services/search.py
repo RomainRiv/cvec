@@ -466,16 +466,49 @@ class CVESearchService:
 
         min_score, max_score = SEVERITY_THRESHOLDS[severity]
 
-        # Get CVE IDs with matching severity from metrics
-        # Filter to CVSS metrics only (not "other" type)
+        # Get CVE IDs with matching severity based on their BEST metric
+        # This ensures consistency with get_best_metric() preference logic
         cvss_metrics = self._metrics_df.filter(
             pl.col("metric_type").str.starts_with("cvss")
             & pl.col("base_score").is_not_null()
-            & (pl.col("base_score") >= min_score)
-            & (pl.col("base_score") <= max_score)
         )
 
-        cve_ids = cvss_metrics.get_column("cve_id").unique().to_list()
+        if len(cvss_metrics) == 0:
+            return SearchResult(pl.DataFrame(schema=cves_df.schema))
+
+        # Apply preference scoring (same as get_best_metric)
+        scored = cvss_metrics.with_columns(
+            [
+                pl.when(pl.col("source") == "cna")
+                .then(100)
+                .otherwise(0)
+                .alias("source_pref"),
+                pl.when(pl.col("metric_type") == "cvssV4_0")
+                .then(40)
+                .when(pl.col("metric_type") == "cvssV3_1")
+                .then(30)
+                .when(pl.col("metric_type") == "cvssV3_0")
+                .then(20)
+                .otherwise(10)
+                .alias("version_pref"),
+            ]
+        ).with_columns(
+            [(pl.col("source_pref") + pl.col("version_pref")).alias("preference")]
+        )
+
+        # Get best metric per CVE
+        best_metrics = (
+            scored.sort(["cve_id", "preference"], descending=[False, True])
+            .group_by("cve_id")
+            .first()
+        )
+
+        # Filter to those matching the severity range
+        matching = best_metrics.filter(
+            (pl.col("base_score") >= min_score) & (pl.col("base_score") <= max_score)
+        )
+
+        cve_ids = matching.get_column("cve_id").unique().to_list()
 
         result = cves_df.filter(pl.col("cve_id").is_in(cve_ids))
 
@@ -897,18 +930,52 @@ class CVESearchService:
 
         min_score, max_score = SEVERITY_THRESHOLDS[severity]
 
-        # Get CVE IDs with matching severity from the result's metrics
+        # Get CVE IDs with matching severity based on their BEST metric
+        # This ensures consistency with get_best_metric() preference logic
         cve_ids_in_result = set(result.cves.get_column("cve_id").to_list())
 
-        matching_metrics = result.metrics.filter(
+        cvss_metrics = result.metrics.filter(
             pl.col("cve_id").is_in(cve_ids_in_result)
             & pl.col("metric_type").str.starts_with("cvss")
             & pl.col("base_score").is_not_null()
-            & (pl.col("base_score") >= min_score)
-            & (pl.col("base_score") <= max_score)
         )
 
-        cve_ids = matching_metrics.get_column("cve_id").unique().to_list()
+        if len(cvss_metrics) == 0:
+            return SearchResult(pl.DataFrame(schema=result.cves.schema))
+
+        # Apply preference scoring (same as get_best_metric)
+        scored = cvss_metrics.with_columns(
+            [
+                pl.when(pl.col("source") == "cna")
+                .then(100)
+                .otherwise(0)
+                .alias("source_pref"),
+                pl.when(pl.col("metric_type") == "cvssV4_0")
+                .then(40)
+                .when(pl.col("metric_type") == "cvssV3_1")
+                .then(30)
+                .when(pl.col("metric_type") == "cvssV3_0")
+                .then(20)
+                .otherwise(10)
+                .alias("version_pref"),
+            ]
+        ).with_columns(
+            [(pl.col("source_pref") + pl.col("version_pref")).alias("preference")]
+        )
+
+        # Get best metric per CVE
+        best_metrics = (
+            scored.sort(["cve_id", "preference"], descending=[False, True])
+            .group_by("cve_id")
+            .first()
+        )
+
+        # Filter to those matching the severity range
+        matching = best_metrics.filter(
+            (pl.col("base_score") >= min_score) & (pl.col("base_score") <= max_score)
+        )
+
+        cve_ids = matching.get_column("cve_id").unique().to_list()
 
         filtered_cves = result.cves.filter(pl.col("cve_id").is_in(cve_ids))
         related = self._get_related_data(cve_ids)
