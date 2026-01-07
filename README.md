@@ -4,8 +4,7 @@ A CLI tool for downloading, extracting, and searching CVE (Common Vulnerabilitie
 
 ## Features
 
-- **Download**: Fetch CVE data from the official [cvelistV5 repository](https://github.com/CVEProject/cvelistV5)
-- **Extract**: Convert JSON CVE data to efficient Parquet format for fast querying
+- **Database Management**: Fetch pre-built parquet files or build locally from JSON
 - **Search**: Search CVEs by product, vendor, CWE ID, severity, and more
 - **Get**: Retrieve detailed information about specific CVEs
 - **Stats**: View database statistics
@@ -23,11 +22,8 @@ uv pip install -e ".[dev]"
 ## Quick Start
 
 ```bash
-# Download CVE data (last 10 years by default)
-cvec download
-
-# Extract to Parquet format
-cvec extract
+# Download pre-built CVE database (recommended, fast!)
+cvec db update
 
 # Search for CVEs
 cvec search "linux kernel"
@@ -44,32 +40,35 @@ cvec stats
 
 ## Usage
 
-### Download
+### Database Management
 
-Download CVE data from the cvelistV5 repository:
+The `db` subcommand manages the CVE database. The recommended approach is to use pre-built parquet files from the [cvec-db](https://github.com/yourusername/cvec-db) repository:
 
 ```bash
-# Download last 10 years (default)
-cvec download
+# Download latest pre-built database (recommended)
+cvec db update
 
-# Download specific number of years
-cvec download --years 5
+# Force update even if local is up-to-date
+cvec db update --force
 
-# Download only CVEs (skip CAPEC/CWE)
-cvec download --cves
+# Download specific version
+cvec db update --tag v20260106
 
-# Download all data (CVEs, CWEs, CAPECs)
-cvec download --all
+# Check database status
+cvec db status
 ```
 
-### Extract
-
-Extract CVE data from JSON files to Parquet format:
+For advanced users who want to build the database locally:
 
 ```bash
-cvec extract
-cvec extract --years 5
-cvec extract --verbose
+# Download raw JSON files
+cvec db download-json
+cvec db download-json --years 5
+cvec db download-json --all  # Include CAPEC/CWE
+
+# Extract JSON to parquet
+cvec db extract-parquet
+cvec db extract-parquet --verbose
 ```
 
 ### Search
@@ -153,6 +152,7 @@ Configuration can be set via environment variables:
 - `CVE_DATA_DIR`: Directory for extracted data (default: `./data`)
 - `CVE_DOWNLOAD_DIR`: Directory for downloaded files (default: `./download`)
 - `CVE_DEFAULT_YEARS`: Number of years to download by default (default: 10)
+- `CVEC_DB_REPO`: GitHub repository for pre-built parquet files (default: `RomainRiv/cvec-db`)
 
 ## Development
 

@@ -4,8 +4,10 @@ This module provides a command-line interface for downloading, extracting,
 and searching CVE data from the cvelistV5 repository.
 
 Usage:
-    cvec download [--years N]    Download CVE data
-    cvec extract [--years N]     Extract CVE data to Parquet
+    cvec db update               Update CVE database from pre-built parquet files
+    cvec db download-json        Download raw JSON files (advanced)
+    cvec db extract-parquet      Extract JSON to parquet locally (advanced)
+    cvec db status               Show database status
     cvec search <query>          Search CVEs
     cvec get <cve-id>            Get details for a specific CVE
     cvec stats                   Show database statistics
@@ -23,6 +25,12 @@ from rich.table import Table
 from cvec.core.config import Config
 from cvec.services.downloader import DownloadService
 from cvec.services.extractor import ExtractorService
+from cvec.services.artifact_fetcher import (
+    ArtifactFetcher,
+    ManifestIncompatibleError,
+    ChecksumMismatchError,
+    SUPPORTED_SCHEMA_VERSION,
+)
 from cvec.services.search import (
     SEVERITY_THRESHOLDS,
     CVESearchService,
@@ -38,6 +46,15 @@ app = typer.Typer(
     help="CVE analysis tool for LLM agents",
     no_args_is_help=True,
 )
+
+# Database management subcommand group
+db_app = typer.Typer(
+    name="db",
+    help="Database management commands",
+    no_args_is_help=True,
+)
+app.add_typer(db_app, name="db")
+
 console = Console()
 
 
@@ -238,19 +255,84 @@ def _output_result(
             )
 
 
-@app.command()
-def download(
+# =============================================================================
+# Database Management Commands (db subcommand group)
+# =============================================================================
+
+
+@db_app.command("update")
+def db_update(
+    force: bool = typer.Option(
+        False, "--force", "-f", help="Force update even if local is up-to-date"
+    ),
+    tag: Optional[str] = typer.Option(
+        None, "--tag", "-t", help="Specific release tag to download"
+    ),
+    repo: Optional[str] = typer.Option(
+        None, "--repo", "-r", help="GitHub repo in 'owner/repo' format"
+    ),
+) -> None:
+    """Update CVE database from pre-built parquet files.
+    
+    This is the recommended way to get CVE data. It downloads pre-built
+    parquet files from the cvec-db repository, which is much faster than
+    downloading and processing raw JSON files.
+    
+    Example:
+        cvec db update
+        cvec db update --force
+        cvec db update --tag v20260106
+    """
+    config = Config()
+    fetcher = ArtifactFetcher(config, repo=repo)
+    
+    try:
+        with console.status("[bold green]Updating CVE database..."):
+            result = fetcher.update(tag=tag, force=force)
+        
+        if result["status"] == "up-to-date":
+            console.print("[green]✓ Database is already up-to-date.[/green]")
+        else:
+            stats = result.get("stats", {})
+            console.print(f"[green]✓ Updated to {result['tag']}[/green]")
+            console.print(f"  - CVEs: {stats.get('cves', 0)}")
+            console.print(f"  - Downloaded {len(result['downloaded'])} files")
+            
+    except ManifestIncompatibleError as e:
+        console.print(f"[red]Error: {e}[/red]")
+        console.print("[yellow]Hint: Run 'pip install --upgrade cvec' to get the latest version.[/yellow]")
+        raise typer.Exit(1)
+    except ChecksumMismatchError as e:
+        console.print(f"[red]Error: {e}[/red]")
+        console.print("[yellow]Hint: Try running the command again. If the problem persists, the release may be corrupted.[/yellow]")
+        raise typer.Exit(1)
+    except Exception as e:
+        console.print(f"[red]Error updating database: {e}[/red]")
+        raise typer.Exit(1)
+
+
+@db_app.command("download-json")
+def db_download_json(
     years: int = typer.Option(
         None, "--years", "-y", help="Number of years to download (default: from config)"
     ),
     all_data: bool = typer.Option(
         False, "--all", "-a", help="Download all data (CVEs, CWEs, CAPECs)"
     ),
-    cves_only: bool = typer.Option(
-        False, "--cves", "-c", help="Download only CVE data"
-    ),
 ) -> None:
-    """Download CVE data from cvelistV5 repository."""
+    """Download raw CVE JSON files from GitHub.
+    
+    This downloads the raw JSON files from the cvelistV5 repository.
+    Use this if you need the original JSON data or want to build
+    parquet files locally.
+    
+    For most users, 'cvec db update' is faster and easier.
+    
+    Example:
+        cvec db download-json
+        cvec db download-json --years 5
+        cvec db download-json --all
+    """
     config = Config()
     if years:
         config.default_years = years
@@ -258,7 +340,7 @@ def download(
     service = DownloadService(config)
 
     with console.status("[bold green]Downloading data..."):
-        if all_data or not cves_only:
+        if all_data:
             console.print("[blue]Downloading CAPEC data...[/blue]")
             service.download_capec()
             console.print("[blue]Downloading CWE data...[/blue]")
@@ -271,22 +353,39 @@ def download(
 
         console.print("[blue]Extracting CVE JSON files...[/blue]")
         extracted = service.extract_cves()
-        console.print(f"[green]✓ Extracted {extracted} CVE files[/green]")
+        console.print(f"[green]✓ Extracted {extracted} CVE JSON files[/green]")
 
     console.print("[bold green]✓ Download complete![/bold green]")
+    console.print("[dim]Hint: Run 'cvec db extract-parquet' to convert to parquet format.[/dim]")
 
 
-@app.command()
-def extract(
+@db_app.command("extract-parquet")
+def db_extract_parquet(
     years: int = typer.Option(
         None, "--years", "-y", help="Number of years to process (default: from config)"
     ),
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Show detailed output"),
 ) -> None:
-    """Extract CVE data from JSON files to Parquet format."""
+    """Extract CVE JSON files to parquet format.
+    
+    This converts the downloaded JSON files into optimized parquet files.
+    You must run 'cvec db download-json' first.
+    
+    For most users, 'cvec db update' is faster and easier.
+    
+    Example:
+        cvec db extract-parquet
+        cvec db extract-parquet --years 5 --verbose
+    """
     config = Config()
     if years:
         config.default_years = years
+
+    # Check if JSON files exist
+    if not config.cve_dir.exists():
+        console.print("[red]Error: No CVE JSON files found.[/red]")
+        console.print("[yellow]Hint: Run 'cvec db download-json' first.[/yellow]")
+        raise typer.Exit(1)
 
     service = ExtractorService(config)
 
@@ -294,7 +393,6 @@ def extract(
         result = service.extract_all()
 
     stats = result.get("stats", {})
-    paths = result.get("paths", {})
 
     console.print(f"[green]✓ Extracted {stats.get('cves', 0)} CVEs[/green]")
 
@@ -309,6 +407,68 @@ def extract(
         console.print(f"  - Tags: {stats.get('tags', 0)}")
 
     console.print("[bold green]✓ Extraction complete![/bold green]")
+
+
+@db_app.command("status")
+def db_status(
+    repo: Optional[str] = typer.Option(
+        None, "--repo", "-r", help="GitHub repo in 'owner/repo' format"
+    ),
+) -> None:
+    """Show database status and check for updates.
+    
+    Displays information about the local database and checks if
+    a newer version is available from the cvec-db repository.
+    
+    Example:
+        cvec db status
+    """
+    config = Config()
+    fetcher = ArtifactFetcher(config, repo=repo)
+    
+    console.print("[bold]CVE Database Status[/bold]\n")
+    
+    # Local status
+    local_manifest = fetcher.get_local_manifest()
+    if local_manifest:
+        console.print("[green]✓ Local database found[/green]")
+        console.print(f"  - Schema version: {local_manifest.get('schema_version', 'unknown')}")
+        console.print(f"  - Generated: {local_manifest.get('generated_at', 'unknown')}")
+        stats = local_manifest.get("stats", {})
+        console.print(f"  - CVEs: {stats.get('cves', 'unknown')}")
+        console.print(f"  - Files: {len(local_manifest.get('files', []))}")
+    else:
+        console.print("[yellow]⚠ No local database found[/yellow]")
+        console.print("  Run 'cvec db update' to download the database.")
+    
+    console.print()
+    
+    # Remote status
+    try:
+        with console.status("Checking for updates..."):
+            status = fetcher.status()
+        
+        if status["remote"]["available"]:
+            remote = status["remote"]["manifest"]
+            console.print("[green]✓ Remote database available[/green]")
+            console.print(f"  - Schema version: {remote.get('schema_version', 'unknown')}")
+            console.print(f"  - Generated: {remote.get('generated_at', 'unknown')}")
+            remote_stats = remote.get("stats", {})
+            console.print(f"  - CVEs: {remote_stats.get('cves', 'unknown')}")
+            
+            if status["needs_update"]:
+                console.print("\n[yellow]⚠ Update available![/yellow]")
+                console.print("  Run 'cvec db update' to download the latest version.")
+            else:
+                console.print("\n[green]✓ Local database is up-to-date[/green]")
+        else:
+            console.print("[yellow]⚠ Could not check remote database[/yellow]")
+    except Exception as e:
+        console.print(f"[yellow]⚠ Could not check remote database: {e}[/yellow]")
+    
+    console.print()
+    console.print(f"[dim]Supported schema version: {SUPPORTED_SCHEMA_VERSION}[/dim]")
+    console.print(f"[dim]Data directory: {config.data_dir}[/dim]")
 
 
 @app.command()
@@ -764,7 +924,7 @@ def stats(
         statistics = service.stats()
     except FileNotFoundError:
         console.print(
-            "[red]No data found. Run 'cvec download' and 'cvec extract' first.[/red]"
+            "[red]No data found. Run 'cvec db update' first.[/red]"
         )
         raise typer.Exit(1)
 
