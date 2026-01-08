@@ -19,12 +19,19 @@ Parquet files produced:
 import concurrent.futures
 import json
 import os
+import sys
 from pathlib import Path
 from typing import Any, Iterable, List, NamedTuple, Optional
 
 import polars as pl
 from pydantic import BaseModel
-from tqdm import tqdm
+from rich.progress import (
+    BarColumn,
+    Progress,
+    TaskProgressColumn,
+    TextColumn,
+    TimeRemainingColumn,
+)
 
 from cvec.core.config import Config, get_config
 from cvec.models.cve_model import (
@@ -35,12 +42,13 @@ from cvec.models.cve_model import (
 )
 
 
-def _get_iterable(obj: Any) -> Iterable:
+def _get_iterable(obj: Any) -> Iterable[Any]:
     """Get an iterable from an object that may have .root or be a list itself."""
     if obj is None:
         return []
     if hasattr(obj, "root"):
-        return obj.root
+        result: Iterable[Any] = obj.root
+        return result
     if isinstance(obj, (list, tuple)):
         return obj
     return [obj]
@@ -269,7 +277,7 @@ def _extract_metrics(
     metrics_container: Any, cve_id: str, source: str
 ) -> List[CVEMetric]:
     """Extract all metrics from a metrics container."""
-    results = []
+    results: List[CVEMetric] = []
 
     if not metrics_container:
         return results
@@ -580,8 +588,8 @@ def _extract_products_and_versions(
     affected_container: Any, cve_id: str, source: str
 ) -> tuple[List[CVEProduct], List[CVEVersion]]:
     """Extract affected products and their version information."""
-    products = []
-    versions = []
+    products: List[CVEProduct] = []
+    versions: List[CVEVersion] = []
 
     if not affected_container:
         return products, versions
@@ -726,7 +734,7 @@ def _extract_cwes(
     problem_types_container: Any, cve_id: str, source: str
 ) -> List[CVECWE]:
     """Extract CWE/problem type mappings."""
-    results = []
+    results: List[CVECWE] = []
 
     if not problem_types_container:
         return results
@@ -774,7 +782,7 @@ def _extract_references(
     references_container: Any, cve_id: str, source: str
 ) -> List[CVEReference]:
     """Extract references with tags."""
-    results = []
+    results: List[CVEReference] = []
 
     if not references_container:
         return results
@@ -808,7 +816,7 @@ def _extract_credits(
     credits_container: Any, cve_id: str, source: str
 ) -> List[CVECredit]:
     """Extract credits and acknowledgments."""
-    results = []
+    results: List[CVECredit] = []
 
     if not credits_container:
         return results
@@ -848,7 +856,7 @@ def _extract_descriptions(
     descriptions_container: Any, cve_id: str, source: str
 ) -> List[CVEDescription]:
     """Extract all descriptions."""
-    results = []
+    results: List[CVEDescription] = []
 
     if not descriptions_container:
         return results
@@ -1365,13 +1373,18 @@ class ExtractorService:
             if self.quiet:
                 results = list(executor.map(_process_file, file_args))
             else:
-                results = list(
-                    tqdm(
-                        executor.map(_process_file, file_args),
-                        total=len(file_args),
-                        desc="Extracting",
-                    )
+                progress = Progress(
+                    TextColumn("{task.description}"),
+                    BarColumn(),
+                    TaskProgressColumn(),
+                    TimeRemainingColumn(),
                 )
+                with progress:
+                    task = progress.add_task("Extracting", total=len(file_args))
+                    results = []
+                    for result in executor.map(_process_file, file_args):
+                        results.append(result)
+                        progress.update(task, advance=1)
 
         # Aggregate results
         for result in results:

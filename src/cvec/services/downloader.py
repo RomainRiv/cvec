@@ -1,12 +1,21 @@
 """Download service for CVE, CWE, and CAPEC data."""
 
 import os
+import sys
 import zipfile
 from pathlib import Path
 from typing import Optional
 
 import requests
-from tqdm import tqdm
+from rich.progress import (
+    BarColumn,
+    DownloadColumn,
+    Progress,
+    TaskProgressColumn,
+    TextColumn,
+    TimeRemainingColumn,
+    TransferSpeedColumn,
+)
 
 from cvec.core.config import Config, get_config
 
@@ -52,16 +61,20 @@ class DownloadService:
                     if chunk:
                         f.write(chunk)
         else:
-            with (
-                open(dest_path, "wb") as f,
-                tqdm(
-                    total=total, unit="B", unit_scale=True, desc=desc or dest_path.name
-                ) as pbar,
-            ):
-                for chunk in response.iter_content(chunk_size=8192):
-                    if chunk:
-                        f.write(chunk)
-                        pbar.update(len(chunk))
+            progress = Progress(
+                TextColumn("{task.description}"),
+                BarColumn(),
+                DownloadColumn(),
+                TransferSpeedColumn(),
+                TimeRemainingColumn(),
+            )
+            with progress:
+                task = progress.add_task(desc or dest_path.name, total=total)
+                with open(dest_path, "wb") as f:
+                    for chunk in response.iter_content(chunk_size=8192):
+                        if chunk:
+                            f.write(chunk)
+                            progress.update(task, advance=len(chunk))
 
     def download_capec(self, url: Optional[str] = None) -> Path:
         """Download CAPEC attack patterns XML.
@@ -75,8 +88,8 @@ class DownloadService:
         url = url or CAPEC_URL
         dest_path = self.config.capec_xml
 
-        if not self.quiet:
-            print(f"Downloading CAPEC from {url}")
+        # if not self.quiet:
+        #     print(f"Downloading CAPEC from {url}")
 
         self._download_with_progress(url, dest_path, "CAPEC")
 
@@ -98,8 +111,8 @@ class DownloadService:
         dest_path = self.config.cwe_xml
         temp_zip = dest_path.with_suffix(".zip.tmp")
 
-        if not self.quiet:
-            print(f"Downloading CWE from {url}")
+        # if not self.quiet:
+        #     print(f"Downloading CWE from {url}")
 
         self._download_with_progress(url, temp_zip, "CWE")
 
@@ -136,8 +149,8 @@ class DownloadService:
         url = url or CVE_GITHUB_URL
         dest_path = self.config.cve_zip
 
-        if not self.quiet:
-            print(f"Downloading CVEs from {url}")
+        # if not self.quiet:
+        #     print(f"Downloading CVEs from {url}")
 
         self._download_with_progress(url, dest_path, "cvelistV5")
 
@@ -149,13 +162,13 @@ class DownloadService:
     def extract_cves(self, years: Optional[int] = None) -> Path:
         """Extract CVE files from the downloaded zip archive.
 
-        Organizes CVEs by year and optionally filters to recent years.
+               Organizes CVEs by year and optionally filters to recent years.
 
-        Args:
-            years: Number of years to include. If None, uses config default.
-
-        Returns:
-            Path to the extraction directory.
+               Args:
+                   years: Number of years to include. If None, uses config default.
+        f
+               Returns:
+                   Path to the extraction directory.
         """
         zip_path = self.config.cve_zip
         dest_dir = self.config.cve_dir
@@ -188,13 +201,20 @@ class DownloadService:
                 print(f"Found {len(json_members)} JSON files in archive")
 
             extracted_count = 0
-            iterator = (
-                tqdm(json_members, desc="Extracting", unit="file")
-                if not self.quiet
-                else json_members
-            )
 
-            for member_info in iterator:
+            if self.quiet:
+                iterator = json_members
+            else:
+                progress = Progress(
+                    TextColumn("{task.description}"),
+                    BarColumn(),
+                    TaskProgressColumn(),
+                    TimeRemainingColumn(),
+                )
+                progress.start()
+                task = progress.add_task("Extracting", total=len(json_members))
+
+            for member_info in json_members:
                 relative_path = member_info.filename[len(root_dir) + 1 :]
                 file_name = os.path.basename(relative_path)
 
@@ -223,6 +243,12 @@ class DownloadService:
                     target.write(source.read())
 
                 extracted_count += 1
+
+                if not self.quiet:
+                    progress.update(task, advance=1)
+
+            if not self.quiet:
+                progress.stop()
 
         if not self.quiet:
             print(f"Extracted {extracted_count} CVE files to {dest_dir}")

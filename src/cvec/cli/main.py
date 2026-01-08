@@ -287,8 +287,7 @@ def db_update(
     fetcher = ArtifactFetcher(config, repo=repo)
 
     try:
-        with console.status("[bold green]Updating CVE database..."):
-            result = fetcher.update(tag=tag, force=force)
+        result = fetcher.update(tag=tag, force=force)
 
         if result["status"] == "up-to-date":
             console.print("[green]✓ Database is already up-to-date.[/green]")
@@ -343,23 +342,26 @@ def db_download_json(
 
     service = DownloadService(config)
 
-    with console.status("[bold green]Downloading data..."):
-        if all_data:
-            console.print("[blue]Downloading CAPEC data...[/blue]")
-            service.download_capec()
-            console.print("[blue]Downloading CWE data...[/blue]")
-            service.download_cwe()
+    if all_data:
+        console.print("[blue]Downloading CAPEC data...[/blue]")
+        service.download_capec()
+        console.print("[green]✓ CAPEC downloaded[/green]\n")
+        
+        console.print("[blue]Downloading CWE data...[/blue]")
+        service.download_cwe()
+        console.print("[green]✓ CWE downloaded[/green]\n")
 
-        console.print(
-            f"[blue]Downloading CVE data (last {config.default_years} years)...[/blue]"
-        )
-        service.download_cves()
+    console.print(
+        f"[blue]Downloading CVE data (last {config.default_years} years)...[/blue]"
+    )
+    service.download_cves()
+    console.print("[green]✓ CVE data downloaded[/green]\n")
 
-        console.print("[blue]Extracting CVE JSON files...[/blue]")
-        extracted = service.extract_cves()
-        console.print(f"[green]✓ Extracted {extracted} CVE JSON files[/green]")
+    console.print("[blue]Extracting CVE JSON files...[/blue]")
+    extracted = service.extract_cves()
+    console.print(f"[green]✓ Extracted to {extracted}[/green]")
 
-    console.print("[bold green]✓ Download complete![/bold green]")
+    console.print("\n[bold green]✓ Download complete![/bold green]")
     console.print(
         "[dim]Hint: Run 'cvec db extract-parquet' to convert to parquet format.[/dim]"
     )
@@ -395,8 +397,8 @@ def db_extract_parquet(
 
     service = ExtractorService(config)
 
-    with console.status("[bold green]Extracting CVE data..."):
-        result = service.extract_all()
+    console.print("[blue]Extracting CVE data...[/blue]")
+    result = service.extract_all()
 
     stats = result.get("stats", {})
 
@@ -453,8 +455,7 @@ def db_status(
 
     # Remote status
     try:
-        with console.status("Checking for updates..."):
-            status = fetcher.status()
+        status = fetcher.status()
 
         if status["remote"]["available"]:
             remote = status["remote"]["manifest"]

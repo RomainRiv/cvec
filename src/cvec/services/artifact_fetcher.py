@@ -3,11 +3,20 @@
 import hashlib
 import json
 import os
+import sys
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 import requests
-from tqdm import tqdm
+from rich.progress import (
+    BarColumn,
+    DownloadColumn,
+    Progress,
+    TaskProgressColumn,
+    TextColumn,
+    TimeRemainingColumn,
+    TransferSpeedColumn,
+)
 
 from cvec import MANIFEST_SCHEMA_VERSION
 from cvec.core.config import Config, get_config
@@ -59,7 +68,7 @@ class ArtifactFetcher:
         self.repo = repo or os.environ.get("CVEC_DB_REPO", DEFAULT_CVEC_DB_REPO)
         self.config.ensure_directories()
 
-    def _get_latest_release(self) -> dict:
+    def _get_latest_release(self) -> dict[str, Any]:
         """Get the latest release from the cvec-db repository.
 
         Returns:
@@ -68,9 +77,10 @@ class ArtifactFetcher:
         url = f"https://api.github.com/repos/{self.repo}/releases/latest"
         response = requests.get(url)
         response.raise_for_status()
-        return response.json()
+        result: dict[str, Any] = response.json()
+        return result
 
-    def _get_release_by_tag(self, tag: str) -> dict:
+    def _get_release_by_tag(self, tag: str) -> dict[str, Any]:
         """Get a specific release by tag.
 
         Args:
@@ -82,7 +92,8 @@ class ArtifactFetcher:
         url = f"https://api.github.com/repos/{self.repo}/releases/tags/{tag}"
         response = requests.get(url)
         response.raise_for_status()
-        return response.json()
+        result: dict[str, Any] = response.json()
+        return result
 
     def _download_file(
         self,
@@ -114,17 +125,21 @@ class ArtifactFetcher:
                         f.write(chunk)
                         sha256.update(chunk)
         else:
-            with (
-                open(dest_path, "wb") as f,
-                tqdm(
-                    total=total, unit="B", unit_scale=True, desc=desc or dest_path.name
-                ) as pbar,
-            ):
-                for chunk in response.iter_content(chunk_size=8192):
-                    if chunk:
-                        f.write(chunk)
-                        sha256.update(chunk)
-                        pbar.update(len(chunk))
+            progress = Progress(
+                TextColumn("{task.description}"),
+                BarColumn(),
+                DownloadColumn(),
+                TransferSpeedColumn(),
+                TimeRemainingColumn(),
+            )
+            with progress:
+                task = progress.add_task(desc or dest_path.name, total=total)
+                with open(dest_path, "wb") as f:
+                    for chunk in response.iter_content(chunk_size=8192):
+                        if chunk:
+                            f.write(chunk)
+                            sha256.update(chunk)
+                            progress.update(task, advance=len(chunk))
 
         # Verify checksum
         if expected_sha256:
@@ -136,7 +151,7 @@ class ArtifactFetcher:
                     f"expected {expected_sha256}, got {actual_sha256}"
                 )
 
-    def fetch_manifest(self, tag: Optional[str] = None) -> dict:
+    def fetch_manifest(self, tag: Optional[str] = None) -> dict[str, Any]:
         """Fetch the manifest from a release.
 
         Args:
@@ -165,7 +180,8 @@ class ArtifactFetcher:
         # Download manifest
         response = requests.get(manifest_asset["browser_download_url"])
         response.raise_for_status()
-        return response.json()
+        result: dict[str, Any] = response.json()
+        return result
 
     def check_compatibility(self, manifest: dict) -> bool:
         """Check if the manifest is compatible with this version of cvec.
@@ -184,7 +200,7 @@ class ArtifactFetcher:
             raise ManifestIncompatibleError(schema_version, SUPPORTED_SCHEMA_VERSION)
         return True
 
-    def get_local_manifest(self) -> Optional[dict]:
+    def get_local_manifest(self) -> Optional[dict[str, Any]]:
         """Get the local manifest if it exists.
 
         Returns:
@@ -192,10 +208,11 @@ class ArtifactFetcher:
         """
         manifest_path = self.config.data_dir / "manifest.json"
         if manifest_path.exists():
-            return json.loads(manifest_path.read_text())
+            result: dict[str, Any] = json.loads(manifest_path.read_text())
+            return result
         return None
 
-    def needs_update(self, remote_manifest: dict) -> bool:
+    def needs_update(self, remote_manifest: dict[str, Any]) -> bool:
         """Check if local database needs to be updated.
 
         Args:
@@ -212,7 +229,8 @@ class ArtifactFetcher:
         local_time = local_manifest.get("generated_at", "")
         remote_time = remote_manifest.get("generated_at", "")
 
-        return remote_time > local_time
+        result: bool = remote_time > local_time
+        return result
 
     def update(
         self,

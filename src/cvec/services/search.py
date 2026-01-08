@@ -6,7 +6,7 @@ It supports searching by CVE ID, product, vendor, CWE, severity, and date range.
 
 import re
 from datetime import datetime, timedelta
-from typing import Dict, List, Literal, Optional
+from typing import Any, Dict, List, Literal, Optional
 
 import polars as pl
 
@@ -743,7 +743,8 @@ class CVESearchService:
         if len(desc) == 0:
             return None
 
-        return desc.head(1).get_column("value").to_list()[0]
+        result: str = desc.head(1).get_column("value").to_list()[0]
+        return result
 
     def get_kev_info(self, cve_id: str) -> Optional[dict]:
         """Get CISA Known Exploited Vulnerability (KEV) info for a CVE.
@@ -773,12 +774,13 @@ class CVESearchService:
             import json as json_module
 
             try:
-                return json_module.loads(other_content)
+                result: dict[str, Any] = json_module.loads(other_content)
+                return result
             except (json_module.JSONDecodeError, TypeError):
                 return {"raw": other_content}
         return None
 
-    def get_ssvc_info(self, cve_id: str) -> Optional[dict]:
+    def get_ssvc_info(self, cve_id: str) -> Optional[dict[str, Any]]:
         """Get CISA SSVC (Stakeholder-Specific Vulnerability Categorization) info for a CVE.
 
         Args:
@@ -806,22 +808,23 @@ class CVESearchService:
             import json as json_module
 
             try:
-                return json_module.loads(other_content)
+                result: dict[str, Any] = json_module.loads(other_content)
+                return result
             except (json_module.JSONDecodeError, TypeError):
                 return {"raw": other_content}
         return None
 
-    def filter_by_state(self, result: SearchResult, state: str) -> SearchResult:
+    def filter_by_state(self, search_result: SearchResult, state: str) -> SearchResult:
         """Filter an existing SearchResult by CVE state.
 
         Args:
-            result: SearchResult to filter.
+            search_result: SearchResult to filter.
             state: CVE state to filter by (e.g., "PUBLISHED", "REJECTED").
 
         Returns:
             New SearchResult with filtered CVEs and related data.
         """
-        filtered_cves = result.cves.filter(
+        filtered_cves = search_result.cves.filter(
             pl.col("state").str.to_uppercase() == state.upper()
         )
 

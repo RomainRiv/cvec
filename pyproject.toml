@@ -10,7 +10,6 @@ dependencies = [
     "polars>=1.31.0",
     "pydantic>=2.11.7",
     "requests>=2.32.3",
-    "tqdm>=4.67.0",
     "typer>=0.16.0",
     "rich>=14.0.0",
 ]
@@ -20,7 +19,6 @@ dev = [
     "pytest>=8.0.0",
     "pytest-cov>=4.1.0",
     "types-requests>=2.32.4.20250611",
-    "types-tqdm>=4.67.0.20250516",
     "black>=24.0.0",
     "mypy>=1.8.0",
 ]
