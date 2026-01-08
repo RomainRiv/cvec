@@ -346,7 +346,7 @@ def db_download_json(
         console.print("[blue]Downloading CAPEC data...[/blue]")
         service.download_capec()
         console.print("[green]✓ CAPEC downloaded[/green]\n")
-        
+
         console.print("[blue]Downloading CWE data...[/blue]")
         service.download_cwe()
         console.print("[green]✓ CWE downloaded[/green]\n")
