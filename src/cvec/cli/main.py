@@ -273,11 +273,11 @@ def db_update(
     ),
 ) -> None:
     """Update CVE database from pre-built parquet files.
-    
+
     This is the recommended way to get CVE data. It downloads pre-built
     parquet files from the cvec-db repository, which is much faster than
     downloading and processing raw JSON files.
-    
+
     Example:
         cvec db update
         cvec db update --force
@@ -285,11 +285,11 @@ def db_update(
     """
     config = Config()
     fetcher = ArtifactFetcher(config, repo=repo)
-    
+
     try:
         with console.status("[bold green]Updating CVE database..."):
             result = fetcher.update(tag=tag, force=force)
-        
+
         if result["status"] == "up-to-date":
             console.print("[green]✓ Database is already up-to-date.[/green]")
         else:
@@ -297,14 +297,18 @@ def db_update(
             console.print(f"[green]✓ Updated to {result['tag']}[/green]")
             console.print(f"  - CVEs: {stats.get('cves', 0)}")
             console.print(f"  - Downloaded {len(result['downloaded'])} files")
-            
+
     except ManifestIncompatibleError as e:
         console.print(f"[red]Error: {e}[/red]")
-        console.print("[yellow]Hint: Run 'pip install --upgrade cvec' to get the latest version.[/yellow]")
+        console.print(
+            "[yellow]Hint: Run 'pip install --upgrade cvec' to get the latest version.[/yellow]"
+        )
         raise typer.Exit(1)
     except ChecksumMismatchError as e:
         console.print(f"[red]Error: {e}[/red]")
-        console.print("[yellow]Hint: Try running the command again. If the problem persists, the release may be corrupted.[/yellow]")
+        console.print(
+            "[yellow]Hint: Try running the command again. If the problem persists, the release may be corrupted.[/yellow]"
+        )
         raise typer.Exit(1)
     except Exception as e:
         console.print(f"[red]Error updating database: {e}[/red]")
@@ -321,13 +325,13 @@ def db_download_json(
     ),
 ) -> None:
     """Download raw CVE JSON files from GitHub.
-    
+
     This downloads the raw JSON files from the cvelistV5 repository.
     Use this if you need the original JSON data or want to build
     parquet files locally.
-    
+
     For most users, 'cvec db update' is faster and easier.
-    
+
     Example:
         cvec db download-json
         cvec db download-json --years 5
@@ -356,7 +360,9 @@ def db_download_json(
         console.print(f"[green]✓ Extracted {extracted} CVE JSON files[/green]")
 
     console.print("[bold green]✓ Download complete![/bold green]")
-    console.print("[dim]Hint: Run 'cvec db extract-parquet' to convert to parquet format.[/dim]")
+    console.print(
+        "[dim]Hint: Run 'cvec db extract-parquet' to convert to parquet format.[/dim]"
+    )
 
 
 @db_app.command("extract-parquet")
@@ -367,12 +373,12 @@ def db_extract_parquet(
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Show detailed output"),
 ) -> None:
     """Extract CVE JSON files to parquet format.
-    
+
     This converts the downloaded JSON files into optimized parquet files.
     You must run 'cvec db download-json' first.
-    
+
     For most users, 'cvec db update' is faster and easier.
-    
+
     Example:
         cvec db extract-parquet
         cvec db extract-parquet --years 5 --verbose
@@ -416,23 +422,25 @@ def db_status(
     ),
 ) -> None:
     """Show database status and check for updates.
-    
+
     Displays information about the local database and checks if
     a newer version is available from the cvec-db repository.
-    
+
     Example:
         cvec db status
     """
     config = Config()
     fetcher = ArtifactFetcher(config, repo=repo)
-    
+
     console.print("[bold]CVE Database Status[/bold]\n")
-    
+
     # Local status
     local_manifest = fetcher.get_local_manifest()
     if local_manifest:
         console.print("[green]✓ Local database found[/green]")
-        console.print(f"  - Schema version: {local_manifest.get('schema_version', 'unknown')}")
+        console.print(
+            f"  - Schema version: {local_manifest.get('schema_version', 'unknown')}"
+        )
         console.print(f"  - Generated: {local_manifest.get('generated_at', 'unknown')}")
         stats = local_manifest.get("stats", {})
         console.print(f"  - CVEs: {stats.get('cves', 'unknown')}")
@@ -440,22 +448,24 @@ def db_status(
     else:
         console.print("[yellow]⚠ No local database found[/yellow]")
         console.print("  Run 'cvec db update' to download the database.")
-    
+
     console.print()
-    
+
     # Remote status
     try:
         with console.status("Checking for updates..."):
             status = fetcher.status()
-        
+
         if status["remote"]["available"]:
             remote = status["remote"]["manifest"]
             console.print("[green]✓ Remote database available[/green]")
-            console.print(f"  - Schema version: {remote.get('schema_version', 'unknown')}")
+            console.print(
+                f"  - Schema version: {remote.get('schema_version', 'unknown')}"
+            )
             console.print(f"  - Generated: {remote.get('generated_at', 'unknown')}")
             remote_stats = remote.get("stats", {})
             console.print(f"  - CVEs: {remote_stats.get('cves', 'unknown')}")
-            
+
             if status["needs_update"]:
                 console.print("\n[yellow]⚠ Update available![/yellow]")
                 console.print("  Run 'cvec db update' to download the latest version.")
@@ -465,7 +475,7 @@ def db_status(
             console.print("[yellow]⚠ Could not check remote database[/yellow]")
     except Exception as e:
         console.print(f"[yellow]⚠ Could not check remote database: {e}[/yellow]")
-    
+
     console.print()
     console.print(f"[dim]Supported schema version: {SUPPORTED_SCHEMA_VERSION}[/dim]")
     console.print(f"[dim]Data directory: {config.data_dir}[/dim]")
@@ -923,9 +933,7 @@ def stats(
     try:
         statistics = service.stats()
     except FileNotFoundError:
-        console.print(
-            "[red]No data found. Run 'cvec db update' first.[/red]"
-        )
+        console.print("[red]No data found. Run 'cvec db update' first.[/red]")
         raise typer.Exit(1)
 
     if format == OutputFormat.JSON:
