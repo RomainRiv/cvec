@@ -7,8 +7,9 @@ Usage:
     cvec db update               Update CVE database from pre-built parquet files
     cvec db download-json        Download raw JSON files (advanced)
     cvec db extract-parquet      Extract JSON to parquet locally (advanced)
+    cvec db extract-embeddings   Generate embeddings for semantic search
     cvec db status               Show database status
-    cvec search <query>          Search CVEs
+    cvec search <query>          Search CVEs (use --semantic for semantic search)
     cvec get <cve-id>            Get details for a specific CVE
     cvec stats                   Show database statistics
 """
@@ -25,6 +26,7 @@ from rich.table import Table
 from cvec.core.config import Config
 from cvec.services.downloader import DownloadService
 from cvec.services.extractor import ExtractorService
+from cvec.services.embeddings import EmbeddingsService
 from cvec.services.artifact_fetcher import (
     ArtifactFetcher,
     ManifestIncompatibleError,
@@ -417,6 +419,50 @@ def db_extract_parquet(
     console.print("[bold green]✓ Extraction complete![/bold green]")
 
 
+@db_app.command("extract-embeddings")
+def db_extract_embeddings(
+    batch_size: int = typer.Option(
+        256, "--batch-size", "-b", help="Number of CVEs to process per batch"
+    ),
+    verbose: bool = typer.Option(False, "--verbose", "-v", help="Show detailed output"),
+) -> None:
+    """Generate embeddings for semantic search.
+
+    This creates embeddings from CVE titles and descriptions using the
+    all-MiniLM-L6-v2 sentence-transformer model. These embeddings enable
+    semantic (natural language) search across CVEs.
+
+    You must have parquet data first - run 'cvec db update' or 'cvec db extract-parquet'.
+
+    Example:
+        cvec db extract-embeddings
+        cvec db extract-embeddings --batch-size 512 --verbose
+    """
+    config = Config()
+
+    # Check if parquet files exist
+    if not config.cves_parquet.exists():
+        console.print("[red]Error: No CVE parquet data found.[/red]")
+        console.print("[yellow]Hint: Run 'cvec db update' first.[/yellow]")
+        raise typer.Exit(1)
+
+    console.print("[blue]Generating embeddings for semantic search...[/blue]")
+    console.print("[dim]Using model: all-MiniLM-L6-v2[/dim]")
+
+    try:
+        service = EmbeddingsService(config, quiet=not verbose)
+        result = service.extract_embeddings(batch_size=batch_size)
+
+        console.print(f"[green]✓ Generated {result['count']} embeddings[/green]")
+        console.print(f"  - Model: {result['model']}")
+        console.print(f"  - Dimension: {result['dimension']}")
+        console.print(f"  - Saved to: {result['path']}")
+
+    except Exception as e:
+        console.print(f"[red]Error generating embeddings: {e}[/red]")
+        raise typer.Exit(1)
+
+
 @db_app.command("status")
 def db_status(
     repo: Optional[str] = typer.Option(
@@ -453,6 +499,19 @@ def db_status(
 
     console.print()
 
+    # Embeddings status
+    embeddings_service = EmbeddingsService(config, quiet=True)
+    embeddings_stats = embeddings_service.get_stats()
+    if embeddings_stats:
+        console.print("[green]✓ Semantic search embeddings found[/green]")
+        console.print(f"  - Embeddings: {embeddings_stats['count']}")
+        console.print(f"  - Model: {embeddings_stats['model']}")
+    else:
+        console.print("[yellow]⚠ No semantic search embeddings[/yellow]")
+        console.print("  Run 'cvec db extract-embeddings' to enable semantic search.")
+
+    console.print()
+
     # Remote status
     try:
         status = fetcher.status()
@@ -485,7 +544,14 @@ def db_status(
 @app.command()
 def search(
     query: str = typer.Argument(
-        ..., help="Search query (product name, vendor, or CWE ID)"
+        ...,
+        help="Search query (product name, vendor, CWE ID, or natural language for semantic search)",
+    ),
+    semantic: bool = typer.Option(
+        False,
+        "--semantic",
+        "-m",
+        help="Use semantic (natural language) search instead of keyword matching",
     ),
     vendor: Optional[str] = typer.Option(
         None, "--vendor", "-V", help="Filter by vendor name"
@@ -517,6 +583,11 @@ def search(
     exact: bool = typer.Option(
         False, "--exact", "-e", help="Use exact literal matching (no regex)"
     ),
+    min_similarity: float = typer.Option(
+        0.3,
+        "--min-similarity",
+        help="Minimum similarity score for semantic search (0-1)",
+    ),
     limit: int = typer.Option(
         100, "--limit", "-n", help="Maximum number of results to show"
     ),
@@ -530,7 +601,10 @@ def search(
         None, "--output", "-o", help="Write output to file (no truncation when used)"
     ),
 ) -> None:
-    """Search CVEs by product name, vendor, or CWE ID."""
+    """Search CVEs by product name, vendor, CWE ID, or natural language.
+
+    Use --semantic for natural language semantic search (requires embeddings).
+    """
     config = Config()
     service = CVESearchService(config)
 
@@ -541,8 +615,24 @@ def search(
 
     query = query.strip()
 
+    # Semantic search mode
+    if semantic:
+        if not service.has_embeddings():
+            console.print("[red]Error: Embeddings not found for semantic search.[/red]")
+            console.print(
+                "[yellow]Hint: Run 'cvec db extract-embeddings' first.[/yellow]"
+            )
+            raise typer.Exit(1)
+
+        try:
+            result = service.semantic_search(
+                query, top_k=limit, min_similarity=min_similarity
+            )
+        except Exception as e:
+            console.print(f"[red]Error in semantic search: {e}[/red]")
+            raise typer.Exit(1)
     # Auto-detect CVE ID format and redirect to get command behavior
-    if CVE_ID_PATTERN.match(query):
+    elif CVE_ID_PATTERN.match(query):
         result = service.by_id(query)
         if len(result.cves) == 0:
             console.print(f"[red]CVE not found: {query}[/red]")

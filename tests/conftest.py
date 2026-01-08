@@ -657,6 +657,35 @@ def sample_parquet_data(temp_config: Config) -> Config:
 
 
 @pytest.fixture
+def sample_parquet_data_with_embeddings(sample_parquet_data) -> Config:
+    """Create sample Parquet files including embeddings for semantic search tests."""
+    from cvec.services.embeddings import EMBEDDING_DIMENSION
+
+    # Create embeddings for all CVEs in sample_parquet_data
+    # Use simple normalized vectors for testing
+    embeddings_data = {
+        "cve_id": [
+            "CVE-2022-2196",
+            "CVE-2016-7054",
+            "CVE-2023-0001",
+            "CVE-2024-1234",
+            "CVE-2024-9999",
+        ],
+        "embedding": [
+            [1.0] * EMBEDDING_DIMENSION,  # First CVE - high similarity to query
+            [0.8] * EMBEDDING_DIMENSION,
+            [0.5] * EMBEDDING_DIMENSION,
+            [0.3] * EMBEDDING_DIMENSION,
+            [0.1] * EMBEDDING_DIMENSION,  # Last CVE - low similarity
+        ],
+    }
+    embeddings_df = pl.DataFrame(embeddings_data)
+    embeddings_df.write_parquet(sample_parquet_data.cve_embeddings_parquet)
+
+    return sample_parquet_data
+
+
+@pytest.fixture
 def mock_metric_with_cvss() -> dict:
     """Sample metric dict with CVSS v3.1 score."""
     return {

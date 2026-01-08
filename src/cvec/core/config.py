@@ -97,6 +97,11 @@ class Config:
         """Path to CVE tags parquet file."""
         return self.data_dir / "cve_tags.parquet"
 
+    @property
+    def cve_embeddings_parquet(self) -> Path:
+        """Path to CVE embeddings parquet file for semantic search."""
+        return self.data_dir / "cve_embeddings.parquet"
+
     # Legacy alias for backward compatibility
     @property
     def cve_cwe_parquet(self) -> Path:

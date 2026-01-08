@@ -48,12 +48,17 @@ clean:
     rm -rf .pytest_cache
     rm -rf htmlcov
     rm -rf .coverage
+    rm -rf .mypy_cache
     find . -type d -name __pycache__ -exec rm -rf {} +
     find . -type f -name "*.pyc" -delete
 
 # Run the CLI (example usage)
 run *ARGS:
     uv run cvec {{ARGS}}
+
+# Generate embeddings for semantic search
+embeddings:
+    uv run cvec db extract-embeddings
 
 # Full CI pipeline (format, check, test)
 ci: format-check typecheck test

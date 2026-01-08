@@ -400,6 +400,52 @@ class TestFilterByState:
         assert result_upper.count == result_lower.count == result_mixed.count
 
 
+class TestSemanticSearch:
+    """Tests for semantic search functionality."""
+
+    def test_has_embeddings_false(self, sample_parquet_data):
+        """has_embeddings should return False when no embeddings exist."""
+        service = CVESearchService(config=sample_parquet_data)
+        assert service.has_embeddings() is False
+
+    def test_has_embeddings_true(self, sample_parquet_data_with_embeddings):
+        """has_embeddings should return True when embeddings exist."""
+        service = CVESearchService(config=sample_parquet_data_with_embeddings)
+        assert service.has_embeddings() is True
+
+    def test_semantic_search_no_embeddings(self, sample_parquet_data):
+        """semantic_search should raise error when embeddings don't exist."""
+        service = CVESearchService(config=sample_parquet_data)
+
+        with pytest.raises(FileNotFoundError):
+            service.semantic_search("buffer overflow")
+
+    def test_semantic_search_returns_results(self, sample_parquet_data_with_embeddings):
+        """semantic_search should return CVEs with similarity scores."""
+        from unittest.mock import patch, MagicMock
+        import numpy as np
+        from cvec.services.embeddings import EMBEDDING_DIMENSION
+
+        # Mock the embedding model to return a specific query embedding
+        with patch(
+            "cvec.services.embeddings.EmbeddingsService._get_model"
+        ) as mock_get_model:
+            mock_model = MagicMock()
+            # Return embedding that matches the first CVE in the fixture
+            mock_model.encode.return_value = np.array([1.0] * EMBEDDING_DIMENSION)
+            mock_get_model.return_value = mock_model
+
+            service = CVESearchService(config=sample_parquet_data_with_embeddings)
+            result = service.semantic_search(
+                "buffer overflow", top_k=10, min_similarity=0.0
+            )
+
+            assert result.count >= 1
+            # Results should have similarity_score column
+            cve_data = result.to_dicts()[0]
+            assert "similarity_score" in cve_data
+
+
 class TestFilterByKEV:
     """Tests for CISA KEV filtering."""
 
