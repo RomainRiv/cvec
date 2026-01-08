@@ -21,6 +21,8 @@ dev = [
     "pytest-cov>=4.1.0",
     "types-requests>=2.32.4.20250611",
     "types-tqdm>=4.67.0.20250516",
+    "black>=24.0.0",
+    "mypy>=1.8.0",
 ]
 
 [project.scripts]
@@ -42,3 +44,25 @@ python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
 addopts = "-v --tb=short"
+
+[tool.black]
+line-length = 88
+target-version = ['py312']
+include = '\.pyi?$'
+exclude = '''
+(
+    \.git
+  | \.venv
+  | build
+  | dist
+  | __pycache__
+  | src/cvec/models/cve_model\.py
+)
+'''
+
+[tool.mypy]
+python_version = "3.12"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = false
+ignore_missing_imports = true
