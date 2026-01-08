@@ -42,7 +42,7 @@ cvec stats
 
 ### Database Management
 
-The `db` subcommand manages the CVE database. The recommended approach is to use pre-built parquet files from the [cvec-db](https://github.com/yourusername/cvec-db) repository:
+The `db` subcommand manages the CVE database. The recommended approach is to use pre-built parquet files from the [cvec-db](https://github.com/RomainRiv/cvec-db) repository:
 
 ```bash
 # Download latest pre-built database (recommended)
@@ -158,7 +158,7 @@ Configuration can be set via environment variables:
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/cvec.git
+git clone https://github.com/RomainRiv/cvec.git
 cd cvec
 
 # Install dependencies
