@@ -121,7 +121,7 @@ cvec search "linux" --limit 50
 
 ### Semantic Search
 
-Semantic search uses natural language to find CVEs with similar meaning, even if the exact words don't match. This is powered by the `all-MiniLM-L6-v2` sentence-transformer model.
+Semantic search uses natural language to find CVEs with similar meaning, even if the exact words don't match. This is powered by the `all-MiniLM-L6-v2` model via [fastembed](https://github.com/qdrant/fastembed).
 
 **Note:** Semantic search requires the optional `semantic` dependencies:
 
@@ -229,7 +229,7 @@ uv pip install cvec[semantic]
 
 ### How it works
 
-1. CVE titles and descriptions are concatenated and encoded into dense vector embeddings using the `all-MiniLM-L6-v2` model from [sentence-transformers](https://www.sbert.net/).
+1. CVE titles and descriptions are concatenated and encoded into dense vector embeddings using the `all-MiniLM-L6-v2` model via [fastembed](https://github.com/qdrant/fastembed).
 2. Your search query is encoded using the same model.
 3. CVEs are ranked by cosine similarity between the query and CVE embeddings.
 

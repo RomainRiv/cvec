@@ -431,8 +431,8 @@ class TestSemanticSearch:
             "cvec.services.embeddings.EmbeddingsService._get_model"
         ) as mock_get_model:
             mock_model = MagicMock()
-            # Return embedding that matches the first CVE in the fixture
-            mock_model.encode.return_value = np.array([1.0] * EMBEDDING_DIMENSION)
+            # fastembed's embed returns a generator
+            mock_model.embed.return_value = iter([np.array([1.0] * EMBEDDING_DIMENSION)])
             mock_get_model.return_value = mock_model
 
             service = CVESearchService(config=sample_parquet_data_with_embeddings)

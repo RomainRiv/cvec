@@ -1,8 +1,8 @@
 """CVE embeddings service for semantic search.
 
 This module provides functionality to generate and manage embeddings for CVE
-data using sentence-transformers. It uses the all-MiniLM-L6-v2 model which
-offers excellent speed/quality tradeoff for semantic similarity tasks.
+data using fastembed. It uses the all-MiniLM-L6-v2 model which offers excellent
+speed/quality tradeoff for semantic similarity tasks.
 
 The embeddings are computed from the concatenation of CVE title and description,
 enabling semantic search capabilities across the CVE database.
@@ -14,7 +14,7 @@ Note: This module requires the optional 'semantic' dependencies:
 """
 
 from pathlib import Path
-from typing import TYPE_CHECKING, List, Optional, Tuple
+from typing import TYPE_CHECKING, Generator, List, Optional, Tuple
 
 import polars as pl
 from rich.progress import (
@@ -33,7 +33,7 @@ _SEMANTIC_IMPORT_ERROR: Optional[str] = None
 
 try:
     import numpy as np
-    from sentence_transformers import SentenceTransformer
+    from fastembed import TextEmbedding
 
     _SEMANTIC_AVAILABLE = True
 except ImportError as e:
@@ -49,7 +49,7 @@ class SemanticDependencyError(Exception):
     def __init__(self, operation: str = "semantic search"):
         self.operation = operation
         super().__init__(
-            f"Cannot perform {operation}: sentence-transformers is not installed.\n"
+            f"Cannot perform {operation}: fastembed is not installed.\n"
             f"Install with: pip install cvec[semantic]\n"
             f"Or with uv: uv pip install cvec[semantic]"
         )
@@ -59,7 +59,7 @@ def is_semantic_available() -> bool:
     """Check if semantic search dependencies are installed.
 
     Returns:
-        True if sentence-transformers and numpy are available.
+        True if fastembed and numpy are available.
     """
     return _SEMANTIC_AVAILABLE
 
@@ -74,15 +74,16 @@ def get_semantic_import_error() -> Optional[str]:
 
 
 # Model configuration
-DEFAULT_MODEL_NAME = "all-MiniLM-L6-v2"
+# fastembed uses BAAI/bge-small-en-v1.5 equivalent to all-MiniLM-L6-v2
+DEFAULT_MODEL_NAME = "sentence-transformers/all-MiniLM-L6-v2"
 EMBEDDING_DIMENSION = 384  # Dimension of all-MiniLM-L6-v2 embeddings
-DEFAULT_BATCH_SIZE = 256  # Optimal batch size for CPU processing
+DEFAULT_BATCH_SIZE = 512  # Optimal batch size for CPU processing
 
 
 class EmbeddingsService:
     """Service for generating and managing CVE embeddings.
 
-    Uses sentence-transformers with the all-MiniLM-L6-v2 model for fast,
+    Uses fastembed with the all-MiniLM-L6-v2 model for fast,
     high-quality semantic embeddings suitable for similarity search.
     """
 
@@ -96,7 +97,7 @@ class EmbeddingsService:
 
         Args:
             config: Configuration instance. Uses default if not provided.
-            model_name: Name of the sentence-transformers model to use.
+            model_name: Name of the fastembed model to use.
             quiet: If True, suppress progress output.
         """
         self.config = config or get_config()
@@ -104,17 +105,17 @@ class EmbeddingsService:
         self.quiet = quiet
         self._model = None
 
-    def _get_model(self):
-        """Lazily load the sentence-transformers model.
+    def _get_model(self) -> "TextEmbedding":
+        """Lazily load the fastembed model.
 
         Raises:
-            SemanticDependencyError: If sentence-transformers is not installed.
+            SemanticDependencyError: If fastembed is not installed.
         """
         if not _SEMANTIC_AVAILABLE:
             raise SemanticDependencyError("embedding generation")
 
         if self._model is None:
-            self._model = SentenceTransformer(self.model_name)
+            self._model = TextEmbedding(model_name=self.model_name)
         return self._model
 
     def _prepare_texts(
@@ -181,6 +182,7 @@ class EmbeddingsService:
         cves_df: pl.DataFrame,
         descriptions_df: pl.DataFrame,
         batch_size: int = DEFAULT_BATCH_SIZE,
+        progress_callback: Optional[callable] = None,
     ) -> pl.DataFrame:
         """Generate embeddings for CVE data.
 
@@ -188,6 +190,7 @@ class EmbeddingsService:
             cves_df: DataFrame with CVE metadata.
             descriptions_df: DataFrame with CVE descriptions.
             batch_size: Number of texts to process per batch.
+            progress_callback: Optional callback function(processed, total) for progress tracking.
 
         Returns:
             DataFrame with cve_id and embedding columns.
@@ -205,24 +208,29 @@ class EmbeddingsService:
 
         cve_ids = [ct[0] for ct in cve_texts]
         texts = [ct[1] for ct in cve_texts]
+        total_texts = len(texts)
 
         if not self.quiet:
-            print(f"Generating embeddings for {len(texts)} CVEs...")
+            print(f"Generating embeddings for {total_texts} CVEs...")
 
-        # Generate embeddings in batches with progress bar
-        all_embeddings = []
+        # Generate embeddings using fastembed's batch generator
+        all_embeddings: List[List[float]] = []
 
         if self.quiet:
-            # Silent processing
-            for i in range(0, len(texts), batch_size):
-                batch = texts[i : i + batch_size]
-                embeddings = model.encode(
-                    batch,
-                    show_progress_bar=False,
-                    convert_to_numpy=True,
-                    normalize_embeddings=True,  # L2 normalize for cosine similarity
-                )
-                all_embeddings.extend(embeddings)
+            # Silent processing - fastembed returns a generator
+            embeddings_generator = model.embed(
+                texts,
+                batch_size=batch_size,
+            )
+            for embedding in embeddings_generator:
+                # fastembed returns numpy arrays, normalize for cosine similarity
+                emb = np.array(embedding)
+                norm = np.linalg.norm(emb)
+                if norm > 0:
+                    emb = emb / norm
+                all_embeddings.append(emb.tolist())
+                if progress_callback:
+                    progress_callback(len(all_embeddings), total_texts)
         else:
             # Show progress bar
             progress = Progress(
@@ -232,26 +240,27 @@ class EmbeddingsService:
                 TimeRemainingColumn(),
             )
             with progress:
-                task = progress.add_task("Encoding", total=len(texts))
-                for i in range(0, len(texts), batch_size):
-                    batch = texts[i : i + batch_size]
-                    embeddings = model.encode(
-                        batch,
-                        show_progress_bar=False,
-                        convert_to_numpy=True,
-                        normalize_embeddings=True,
-                    )
-                    all_embeddings.extend(embeddings)
-                    progress.update(task, advance=len(batch))
-
-        # Convert to list of lists for Polars
-        embeddings_list = [emb.tolist() for emb in all_embeddings]
+                task = progress.add_task("Encoding", total=total_texts)
+                embeddings_generator = model.embed(
+                    texts,
+                    batch_size=batch_size,
+                )
+                for embedding in embeddings_generator:
+                    # fastembed returns numpy arrays, normalize for cosine similarity
+                    emb = np.array(embedding)
+                    norm = np.linalg.norm(emb)
+                    if norm > 0:
+                        emb = emb / norm
+                    all_embeddings.append(emb.tolist())
+                    progress.update(task, advance=1)
+                    if progress_callback:
+                        progress_callback(len(all_embeddings), total_texts)
 
         # Create DataFrame
         result_df = pl.DataFrame(
             {
                 "cve_id": cve_ids,
-                "embedding": embeddings_list,
+                "embedding": all_embeddings,
             }
         )
 
@@ -318,7 +327,7 @@ class EmbeddingsService:
             "dimension": EMBEDDING_DIMENSION,
         }
 
-    def encode_query(self, query: str) -> np.ndarray:
+    def encode_query(self, query: str) -> "np.ndarray":
         """Encode a search query to an embedding vector.
 
         Args:
@@ -328,12 +337,13 @@ class EmbeddingsService:
             Normalized embedding vector as numpy array.
         """
         model = self._get_model()
-        embedding: np.ndarray = model.encode(
-            query,
-            show_progress_bar=False,
-            convert_to_numpy=True,
-            normalize_embeddings=True,
-        )
+        # fastembed.embed returns a generator, convert to list and get first
+        embeddings = list(model.embed([query]))
+        embedding = np.array(embeddings[0])
+        # Normalize for cosine similarity
+        norm = np.linalg.norm(embedding)
+        if norm > 0:
+            embedding = embedding / norm
         return embedding
 
     def search(

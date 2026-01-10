@@ -164,9 +164,12 @@ class TestGenerateEmbeddings:
     @patch("cvec.services.embeddings.EmbeddingsService._get_model")
     def test_generate_embeddings_basic(self, mock_get_model):
         """Should generate embeddings for CVE data."""
-        # Mock the model
+        # Mock the model - fastembed's embed returns a generator
         mock_model = MagicMock()
-        mock_model.encode.return_value = np.array([[0.1] * EMBEDDING_DIMENSION])
+        # Create a normalized embedding
+        mock_embedding = np.array([0.1] * EMBEDDING_DIMENSION)
+        mock_embedding = mock_embedding / np.linalg.norm(mock_embedding)
+        mock_model.embed.return_value = iter([mock_embedding])
         mock_get_model.return_value = mock_model
 
         cves_df = pl.DataFrame(
@@ -220,14 +223,15 @@ class TestEncodeQuery:
     def test_encode_query(self, mock_get_model):
         """Should encode a query string to an embedding."""
         mock_model = MagicMock()
+        # fastembed's embed returns a generator
         expected_embedding = np.array([0.1] * EMBEDDING_DIMENSION)
-        mock_model.encode.return_value = expected_embedding
+        mock_model.embed.return_value = iter([expected_embedding])
         mock_get_model.return_value = mock_model
 
         service = EmbeddingsService(quiet=True)
         result = service.encode_query("buffer overflow vulnerability")
 
-        mock_model.encode.assert_called_once()
+        mock_model.embed.assert_called_once()
         assert isinstance(result, np.ndarray)
 
 
@@ -244,10 +248,10 @@ class TestSearch:
     @patch("cvec.services.embeddings.EmbeddingsService._get_model")
     def test_search_with_embeddings(self, mock_get_model, temp_config):
         """Should return similar CVEs when embeddings exist."""
-        # Create mock model
+        # Create mock model - fastembed's embed returns a generator
         mock_model = MagicMock()
         query_embedding = np.array([1.0] * EMBEDDING_DIMENSION)
-        mock_model.encode.return_value = query_embedding
+        mock_model.embed.return_value = iter([query_embedding])
         mock_get_model.return_value = mock_model
 
         # Create embeddings file
@@ -274,11 +278,11 @@ class TestSearch:
     @patch("cvec.services.embeddings.EmbeddingsService._get_model")
     def test_search_with_min_similarity(self, mock_get_model, temp_config):
         """Should filter results below min_similarity."""
-        # Create mock model
+        # Create mock model - fastembed's embed returns a generator
         mock_model = MagicMock()
         # Create a normalized query vector (unit length)
         query_vec = np.array([1.0] + [0.0] * (EMBEDDING_DIMENSION - 1))
-        mock_model.encode.return_value = query_vec
+        mock_model.embed.return_value = iter([query_vec])
         mock_get_model.return_value = mock_model
 
         # Create embeddings file with normalized vectors having different similarities
@@ -357,6 +361,54 @@ class TestGetStats:
         assert stats["count"] == 2
         assert stats["model"] == DEFAULT_MODEL_NAME
         assert stats["dimension"] == EMBEDDING_DIMENSION
+
+
+class TestProgressCallback:
+    """Tests for progress callback functionality."""
+
+    @patch("cvec.services.embeddings.EmbeddingsService._get_model")
+    def test_progress_callback_called(self, mock_get_model):
+        """Should call progress callback during embedding generation."""
+        # Mock the model
+        mock_model = MagicMock()
+        # Create normalized embeddings
+        mock_embedding = np.array([0.1] * EMBEDDING_DIMENSION)
+        mock_embedding = mock_embedding / np.linalg.norm(mock_embedding)
+        # Return 2 embeddings as generator
+        mock_model.embed.return_value = iter([mock_embedding, mock_embedding])
+        mock_get_model.return_value = mock_model
+
+        cves_df = pl.DataFrame(
+            {
+                "cve_id": ["CVE-2024-1234", "CVE-2024-5678"],
+                "cna_title": ["Test vulnerability 1", "Test vulnerability 2"],
+            }
+        )
+        descriptions_df = pl.DataFrame(
+            {
+                "cve_id": ["CVE-2024-1234", "CVE-2024-5678"],
+                "lang": ["en", "en"],
+                "value": ["Test description 1", "Test description 2"],
+                "source": ["cna", "cna"],
+            }
+        )
+
+        # Track progress callback calls
+        progress_calls = []
+
+        def track_progress(processed, total):
+            progress_calls.append((processed, total))
+
+        service = EmbeddingsService(quiet=True)
+        result = service.generate_embeddings(
+            cves_df, descriptions_df, batch_size=1, progress_callback=track_progress
+        )
+
+        assert len(result) == 2
+        # Should have 2 progress calls (one per CVE)
+        assert len(progress_calls) == 2
+        assert progress_calls[0] == (1, 2)
+        assert progress_calls[1] == (2, 2)
 
 
 # Fixtures

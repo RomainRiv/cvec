@@ -433,7 +433,7 @@ def db_extract_embeddings(
     """Generate embeddings for semantic search.
 
     This creates embeddings from CVE titles and descriptions using the
-    all-MiniLM-L6-v2 sentence-transformer model. These embeddings enable
+    all-MiniLM-L6-v2 model via fastembed. These embeddings enable
     semantic (natural language) search across CVEs.
 
     Requires the 'semantic' optional dependency:
@@ -464,7 +464,7 @@ def db_extract_embeddings(
         raise typer.Exit(1)
 
     console.print("[blue]Generating embeddings for semantic search...[/blue]")
-    console.print("[dim]Using model: all-MiniLM-L6-v2[/dim]")
+    console.print("[dim]Using model: sentence-transformers/all-MiniLM-L6-v2 (via fastembed)[/dim]")
 
     try:
         service = EmbeddingsService(config, quiet=not verbose)
