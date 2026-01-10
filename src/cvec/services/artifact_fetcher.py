@@ -27,6 +27,9 @@ SUPPORTED_SCHEMA_VERSION = MANIFEST_SCHEMA_VERSION
 # Default cvec-db repository
 DEFAULT_CVEC_DB_REPO = "RomainRiv/cvec-db"  # Update with actual repo
 
+# Files that require semantic search capability (optional)
+SEMANTIC_FILES = {"cve_embeddings.parquet"}
+
 
 class ManifestIncompatibleError(Exception):
     """Raised when the manifest schema version is incompatible."""
@@ -272,16 +275,30 @@ class ArtifactFetcher:
                 print("Local database is already up-to-date.")
             return {"status": "up-to-date", "tag": tag_name, "downloaded": []}
 
+        # Check if semantic search is available for conditional downloads
+        try:
+            from cvec.services.embeddings import is_semantic_available
+
+            semantic_available = is_semantic_available()
+        except ImportError:
+            semantic_available = False
+
         # Build asset lookup
         assets_by_name = {asset["name"]: asset for asset in release.get("assets", [])}
 
         # Download parquet files with checksum verification
         downloaded = []
+        skipped_semantic = []
         files_info = manifest.get("files", [])
 
         for file_info in files_info:
             file_name = file_info["name"]
             expected_sha256 = file_info.get("sha256")
+
+            # Skip embedding files if semantic search is not installed
+            if file_name in SEMANTIC_FILES and not semantic_available:
+                skipped_semantic.append(file_name)
+                continue
 
             if file_name not in assets_by_name:
                 if not self.quiet:
@@ -309,11 +326,17 @@ class ArtifactFetcher:
 
         if not self.quiet:
             print(f"Successfully downloaded {len(downloaded)} files.")
+            if skipped_semantic:
+                print(
+                    f"Skipped {len(skipped_semantic)} semantic search file(s) "
+                    "(install cvec[semantic] to enable)."
+                )
 
         return {
             "status": "updated",
             "tag": tag_name,
             "downloaded": downloaded,
+            "skipped_semantic": skipped_semantic,
             "stats": manifest.get("stats", {}),
         }
 

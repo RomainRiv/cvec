@@ -6,12 +6,16 @@ offers excellent speed/quality tradeoff for semantic similarity tasks.
 
 The embeddings are computed from the concatenation of CVE title and description,
 enabling semantic search capabilities across the CVE database.
+
+Note: This module requires the optional 'semantic' dependencies:
+    pip install cvec[semantic]
+    # or with uv:
+    uv pip install cvec[semantic]
 """
 
 from pathlib import Path
-from typing import List, Optional, Tuple
+from typing import TYPE_CHECKING, List, Optional, Tuple
 
-import numpy as np
 import polars as pl
 from rich.progress import (
     BarColumn,
@@ -22,6 +26,52 @@ from rich.progress import (
 )
 
 from cvec.core.config import Config, get_config
+
+# Check for optional dependencies
+_SEMANTIC_AVAILABLE = False
+_SEMANTIC_IMPORT_ERROR: Optional[str] = None
+
+try:
+    import numpy as np
+    from sentence_transformers import SentenceTransformer
+
+    _SEMANTIC_AVAILABLE = True
+except ImportError as e:
+    _SEMANTIC_IMPORT_ERROR = str(e)
+    # Create placeholder for type hints
+    if TYPE_CHECKING:
+        import numpy as np
+
+
+class SemanticDependencyError(Exception):
+    """Raised when semantic search dependencies are not installed."""
+
+    def __init__(self, operation: str = "semantic search"):
+        self.operation = operation
+        super().__init__(
+            f"Cannot perform {operation}: sentence-transformers is not installed.\n"
+            f"Install with: pip install cvec[semantic]\n"
+            f"Or with uv: uv pip install cvec[semantic]"
+        )
+
+
+def is_semantic_available() -> bool:
+    """Check if semantic search dependencies are installed.
+
+    Returns:
+        True if sentence-transformers and numpy are available.
+    """
+    return _SEMANTIC_AVAILABLE
+
+
+def get_semantic_import_error() -> Optional[str]:
+    """Get the import error message if semantic dependencies failed to load.
+
+    Returns:
+        Error message string or None if dependencies are available.
+    """
+    return _SEMANTIC_IMPORT_ERROR
+
 
 # Model configuration
 DEFAULT_MODEL_NAME = "all-MiniLM-L6-v2"
@@ -55,10 +105,15 @@ class EmbeddingsService:
         self._model = None
 
     def _get_model(self):
-        """Lazily load the sentence-transformers model."""
-        if self._model is None:
-            from sentence_transformers import SentenceTransformer
+        """Lazily load the sentence-transformers model.
 
+        Raises:
+            SemanticDependencyError: If sentence-transformers is not installed.
+        """
+        if not _SEMANTIC_AVAILABLE:
+            raise SemanticDependencyError("embedding generation")
+
+        if self._model is None:
             self._model = SentenceTransformer(self.model_name)
         return self._model
 

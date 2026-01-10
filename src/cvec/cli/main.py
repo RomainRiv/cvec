@@ -26,7 +26,11 @@ from rich.table import Table
 from cvec.core.config import Config
 from cvec.services.downloader import DownloadService
 from cvec.services.extractor import ExtractorService
-from cvec.services.embeddings import EmbeddingsService
+from cvec.services.embeddings import (
+    EmbeddingsService,
+    SemanticDependencyError,
+    is_semantic_available,
+)
 from cvec.services.artifact_fetcher import (
     ArtifactFetcher,
     ManifestIncompatibleError,
@@ -432,12 +436,25 @@ def db_extract_embeddings(
     all-MiniLM-L6-v2 sentence-transformer model. These embeddings enable
     semantic (natural language) search across CVEs.
 
+    Requires the 'semantic' optional dependency:
+        pip install 'cvec[semantic]'
+
     You must have parquet data first - run 'cvec db update' or 'cvec db extract-parquet'.
 
     Example:
         cvec db extract-embeddings
         cvec db extract-embeddings --batch-size 512 --verbose
     """
+    # Check for semantic dependency
+    if not is_semantic_available():
+        console.print("[red]Error: Semantic search dependencies not installed.[/red]")
+        console.print()
+        console.print("Install with:")
+        console.print("  [cyan]pip install cvec\\[semantic][/cyan]")
+        console.print("  [dim]or with uv:[/dim]")
+        console.print("  [cyan]uv pip install cvec\\[semantic][/cyan]")
+        raise typer.Exit(1)
+
     config = Config()
 
     # Check if parquet files exist
@@ -458,6 +475,9 @@ def db_extract_embeddings(
         console.print(f"  - Dimension: {result['dimension']}")
         console.print(f"  - Saved to: {result['path']}")
 
+    except SemanticDependencyError as e:
+        console.print(f"[red]Error: {e}[/red]")
+        raise typer.Exit(1)
     except Exception as e:
         console.print(f"[red]Error generating embeddings: {e}[/red]")
         raise typer.Exit(1)
@@ -499,16 +519,22 @@ def db_status(
 
     console.print()
 
-    # Embeddings status
-    embeddings_service = EmbeddingsService(config, quiet=True)
-    embeddings_stats = embeddings_service.get_stats()
-    if embeddings_stats:
-        console.print("[green]✓ Semantic search embeddings found[/green]")
-        console.print(f"  - Embeddings: {embeddings_stats['count']}")
-        console.print(f"  - Model: {embeddings_stats['model']}")
+    # Semantic search capability status
+    if is_semantic_available():
+        embeddings_service = EmbeddingsService(config, quiet=True)
+        embeddings_stats = embeddings_service.get_stats()
+        if embeddings_stats:
+            console.print("[green]✓ Semantic search enabled[/green]")
+            console.print(f"  - Embeddings: {embeddings_stats['count']}")
+            console.print(f"  - Model: {embeddings_stats['model']}")
+        else:
+            console.print(
+                "[yellow]⚠ Semantic search available but no embeddings[/yellow]"
+            )
+            console.print("  Run 'cvec db extract-embeddings' to generate embeddings.")
     else:
-        console.print("[yellow]⚠ No semantic search embeddings[/yellow]")
-        console.print("  Run 'cvec db extract-embeddings' to enable semantic search.")
+        console.print("[dim]⚠ Semantic search not installed[/dim]")
+        console.print("  Install with: pip install cvec\\[semantic]")
 
     console.print()
 
@@ -603,7 +629,8 @@ def search(
 ) -> None:
     """Search CVEs by product name, vendor, CWE ID, or natural language.
 
-    Use --semantic for natural language semantic search (requires embeddings).
+    Use --semantic for natural language semantic search (requires embeddings
+    and the 'semantic' optional dependency: pip install cvec[semantic]).
     """
     config = Config()
     service = CVESearchService(config)
@@ -617,6 +644,18 @@ def search(
 
     # Semantic search mode
     if semantic:
+        # Check if semantic dependencies are installed
+        if not is_semantic_available():
+            console.print(
+                "[red]Error: Semantic search dependencies not installed.[/red]"
+            )
+            console.print()
+            console.print("Install with:")
+            console.print("  [cyan]pip install cvec\\\\[semantic][/cyan]")
+            console.print("  [dim]or with uv:[/dim]")
+            console.print("  [cyan]uv pip install cvec\\\\[semantic][/cyan]")
+            raise typer.Exit(1)
+
         if not service.has_embeddings():
             console.print("[red]Error: Embeddings not found for semantic search.[/red]")
             console.print(
@@ -628,6 +667,9 @@ def search(
             result = service.semantic_search(
                 query, top_k=limit, min_similarity=min_similarity
             )
+        except SemanticDependencyError as e:
+            console.print(f"[red]Error: {e}[/red]")
+            raise typer.Exit(1)
         except Exception as e:
             console.print(f"[red]Error in semantic search: {e}[/red]")
             raise typer.Exit(1)

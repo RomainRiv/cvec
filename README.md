@@ -15,7 +15,10 @@ A CLI tool for downloading, extracting, and searching CVE (Common Vulnerabilitie
 # Using uv (recommended)
 uv pip install .
 
-# Or for development
+# With semantic search support (optional, adds ~500MB dependencies)
+uv pip install ".[semantic]"
+
+# For development (includes all features)
 uv pip install -e ".[dev]"
 ```
 
@@ -31,7 +34,7 @@ cvec search --vendor "Microsoft" "Windows"
 cvec search --severity critical
 cvec search "CWE-79"
 
-# Semantic search (natural language)
+# Semantic search (natural language) - requires: pip install cvec[semantic]
 cvec search --semantic "memory corruption in image parsing"
 cvec search --semantic "authentication bypass in web applications"
 
@@ -120,6 +123,15 @@ cvec search "linux" --limit 50
 
 Semantic search uses natural language to find CVEs with similar meaning, even if the exact words don't match. This is powered by the `all-MiniLM-L6-v2` sentence-transformer model.
 
+**Note:** Semantic search requires the optional `semantic` dependencies:
+
+```bash
+# Install semantic search support
+pip install cvec[semantic]
+# or with uv:
+uv pip install cvec[semantic]
+```
+
 ```bash
 # First, generate embeddings (one-time setup, ~10-60 min depending on dataset size)
 cvec db extract-embeddings
@@ -207,6 +219,14 @@ uv run pytest --cov=cvec
 
 cvec supports semantic (natural language) search using sentence embeddings. This allows you to search for CVEs using descriptive phrases rather than exact keywords.
 
+**This feature is optional** and requires additional dependencies (~500MB). Install with:
+
+```bash
+pip install cvec[semantic]
+# or with uv:
+uv pip install cvec[semantic]
+```
+
 ### How it works
 
 1. CVE titles and descriptions are concatenated and encoded into dense vector embeddings using the `all-MiniLM-L6-v2` model from [sentence-transformers](https://www.sbert.net/).
@@ -215,11 +235,18 @@ cvec supports semantic (natural language) search using sentence embeddings. This
 
 ### Setup
 
-Generate embeddings after downloading the CVE database:
+After installing the semantic dependencies, generate embeddings:
 
 ```bash
 cvec db update                    # Download CVE database
 cvec db extract-embeddings        # Generate embeddings (~10-60 min on CPU)
+```
+
+Alternatively, if the cvec-db repository provides pre-computed embeddings, they will be downloaded automatically when you have the semantic dependencies installed:
+
+```bash
+pip install cvec[semantic]        # Install semantic support
+cvec db update                    # Downloads database + embeddings
 ```
 
 ### Model Details

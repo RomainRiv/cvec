@@ -574,8 +574,14 @@ class CVESearchService:
 
         Raises:
             FileNotFoundError: If embeddings have not been generated.
+            SemanticDependencyError: If semantic dependencies are not installed.
         """
-        from cvec.services.embeddings import EmbeddingsService
+        from cvec.services.embeddings import EmbeddingsService, is_semantic_available
+
+        if not is_semantic_available():
+            from cvec.services.embeddings import SemanticDependencyError
+
+            raise SemanticDependencyError("semantic search")
 
         cves_df = self._ensure_cves_loaded()
 
