@@ -712,7 +712,9 @@ def db_status(
             console.print(
                 "[yellow]⚠ Semantic search available but no embeddings[/yellow]"
             )
-            console.print("  Run 'cvec db extract-embeddings' to generate embeddings.")
+            console.print(
+                "  Run 'cvec db build extract-embeddings' to generate embeddings."
+            )
     else:
         console.print("[dim]⚠ Semantic search not installed[/dim]")
         console.print("  Install with: pip install cvec\\[semantic]")
@@ -840,7 +842,7 @@ def search(
         if not service.has_embeddings():
             console.print("[red]Error: Embeddings not found for semantic search.[/red]")
             console.print(
-                "[yellow]Hint: Run 'cvec db extract-embeddings' first.[/yellow]"
+                "[yellow]Hint: Run 'cvec db build extract-embeddings' first.[/yellow]"
             )
             raise typer.Exit(1)
 

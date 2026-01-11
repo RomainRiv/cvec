@@ -216,7 +216,7 @@ class TestSearchWithRealData:
             if "cve_id" not in df.columns:
                 pytest.skip(
                     "Real CVE data is in old schema format - "
-                    "run 'cvec db extract-parquet' to regenerate"
+                    "run 'cvec db build extract-parquet' to regenerate"
                 )
         except Exception:
             pytest.skip("Error reading parquet file")

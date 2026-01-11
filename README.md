@@ -69,17 +69,17 @@ For advanced users who want to build the database locally:
 
 ```bash
 # Download raw JSON files
-cvec db download-json
-cvec db download-json --years 5
-cvec db download-json --all  # Include CAPEC/CWE
+cvec db build download-json
+cvec db build download-json --years 5
+cvec db build download-json --all  # Include CAPEC/CWE
 
 # Extract JSON to parquet
-cvec db extract-parquet
-cvec db extract-parquet --verbose
+cvec db build extract-parquet
+cvec db build extract-parquet --verbose
 
 # Generate embeddings for semantic search
-cvec db extract-embeddings
-cvec db extract-embeddings --batch-size 512
+cvec db build extract-embeddings
+cvec db build extract-embeddings --batch-size 512
 ```
 
 ### Search
@@ -238,8 +238,8 @@ uv pip install cvec[semantic]
 After installing the semantic dependencies, generate embeddings:
 
 ```bash
-cvec db update                    # Download CVE database
-cvec db extract-embeddings        # Generate embeddings (~10-60 min on CPU)
+cvec db update                          # Download CVE database
+cvec db build extract-embeddings        # Generate embeddings (~10-60 min on CPU)
 ```
 
 Alternatively, if the cvec-db repository provides pre-computed embeddings, they will be downloaded automatically when you have the semantic dependencies installed:

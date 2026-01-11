@@ -211,11 +211,15 @@ The CLI is built with Typer and has two main command groups:
 ### Database Management (`cvec db`)
 
 ```bash
+# For regular users:
 cvec db update              # Download pre-built parquet files (recommended)
-cvec db download-json       # Download raw JSON files
-cvec db extract-parquet     # Convert JSON to parquet
-cvec db extract-embeddings  # Generate embeddings for semantic search
 cvec db status              # Show database status
+
+# For advanced users / CI (cvec db build):
+cvec db build download-json        # Download raw JSON files
+cvec db build extract-parquet      # Convert JSON to parquet
+cvec db build extract-embeddings   # Generate embeddings for semantic search
+cvec db build create-manifest      # Create manifest.json for distribution
 ```
 
 ### Search & Query
@@ -253,6 +257,13 @@ Configuration is managed by `Config` class in `src/cvec/core/config.py`:
   - `CVE_DATA_DIR`: Data directory
   - `CVE_DOWNLOAD_DIR`: Download directory
   - `CVE_DEFAULT_YEARS`: Years to download (default: 10)
+- Can be overridden per-command with `--data-dir` parameter:
+  - `cvec db update --data-dir /path/to/data`
+  - `cvec db status --data-dir /path/to/data`
+  - `cvec db build download-json --data-dir /path/to/data`
+  - `cvec db build extract-parquet --data-dir /path/to/data`
+  - `cvec db build extract-embeddings --data-dir /path/to/data`
+  - `cvec db build create-manifest --data-dir /path/to/data`
 
 ## CI/CD
 

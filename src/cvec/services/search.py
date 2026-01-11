@@ -188,7 +188,7 @@ class CVESearchService:
             cves_path = self.config.cves_parquet
             if not cves_path.exists():
                 raise FileNotFoundError(
-                    f"CVE data not found at {cves_path}. Run 'cvec db update' or 'cvec db extract-parquet' first."
+                    f"CVE data not found at {cves_path}. Run 'cvec db update' or 'cvec db build extract-parquet' first."
                 )
             self._cves_df = pl.read_parquet(cves_path)
 

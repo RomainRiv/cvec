@@ -291,7 +291,7 @@ class EmbeddingsService:
 
         if not cves_path.exists():
             raise FileNotFoundError(
-                f"CVE data not found at {cves_path}. Run 'cvec db update' or 'cvec db extract-parquet' first."
+                f"CVE data not found at {cves_path}. Run 'cvec db update' or 'cvec db build extract-parquet' first."
             )
 
         cves_df = pl.read_parquet(cves_path)
@@ -367,7 +367,7 @@ class EmbeddingsService:
         if not embeddings_path.exists():
             raise FileNotFoundError(
                 f"Embeddings not found at {embeddings_path}. "
-                "Run 'cvec db extract-embeddings' first."
+                "Run 'cvec db build extract-embeddings' first."
             )
 
         # Load embeddings
