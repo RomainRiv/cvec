@@ -14,7 +14,8 @@ Note: This module requires the optional 'semantic' dependencies:
 """
 
 from pathlib import Path
-from typing import TYPE_CHECKING, Generator, List, Optional, Tuple
+from typing import TYPE_CHECKING, Callable, Generator, List, Optional, Tuple
+from fastembed import TextEmbedding
 
 import polars as pl
 from rich.progress import (
@@ -182,7 +183,7 @@ class EmbeddingsService:
         cves_df: pl.DataFrame,
         descriptions_df: pl.DataFrame,
         batch_size: int = DEFAULT_BATCH_SIZE,
-        progress_callback: Optional[callable] = None,
+        progress_callback: Optional[Callable[[int, int], None]] = None,
     ) -> pl.DataFrame:
         """Generate embeddings for CVE data.
 

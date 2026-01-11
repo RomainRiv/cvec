@@ -96,8 +96,8 @@ class ArtifactFetcher:
             url = f"https://api.github.com/repos/{self.repo}/releases/latest"
             response = requests.get(url)
             response.raise_for_status()
-            result: dict[str, Any] = response.json()
-            return result
+            latest_result: dict[str, Any] = response.json()
+            return latest_result
 
     def _get_release_by_tag(self, tag: str) -> dict[str, Any]:
         """Get a specific release by tag.
