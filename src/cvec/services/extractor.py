@@ -1299,15 +1299,22 @@ TAG_SCHEMA = {
 class ExtractorService:
     """Service for extracting CVE data from JSON files to Parquet."""
 
-    def __init__(self, config: Optional[Config] = None, quiet: bool = False):
+    def __init__(
+        self,
+        config: Optional[Config] = None,
+        quiet: bool = False,
+        generate_embeddings: bool = False,
+    ):
         """Initialize the extractor service.
 
         Args:
             config: Configuration instance. Uses default if not provided.
             quiet: If True, suppress progress output.
+            generate_embeddings: If True, generate embeddings after extraction.
         """
         self.config = config or get_config()
         self.quiet = quiet
+        self.generate_embeddings = generate_embeddings
 
     def extract_all(
         self, years: Optional[List[int]] = None, output_dir: Optional[Path] = None
@@ -1513,6 +1520,30 @@ class ExtractorService:
 
             if not self.quiet:
                 print(f"Wrote {len(tags)} tags to {tags_path}")
+
+        # Generate embeddings if requested
+        if self.generate_embeddings and descriptions:
+            from cvec.services.embeddings import EmbeddingsService
+
+            if not self.quiet:
+                print("Generating embeddings for semantic search...")
+
+            embeddings_service = EmbeddingsService(config=self.config, quiet=self.quiet)
+
+            # Use the already-created DataFrames
+            embeddings_result = embeddings_service.generate_embeddings(
+                df_cves,
+                df_desc if descriptions else pl.DataFrame(schema=DESCRIPTION_SCHEMA),
+            )
+
+            # Save embeddings
+            embeddings_path = output_dir / "cve_embeddings.parquet"
+            embeddings_result.write_parquet(embeddings_path)
+            results_paths["embeddings"] = embeddings_path
+            stats["embeddings"] = len(embeddings_result)
+
+            if not self.quiet:
+                print(f"Wrote {len(embeddings_result)} embeddings to {embeddings_path}")
 
         return {"paths": results_paths, "stats": stats}
 

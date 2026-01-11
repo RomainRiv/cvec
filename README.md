@@ -15,7 +15,10 @@ A CLI tool for downloading, extracting, and searching CVE (Common Vulnerabilitie
 # Using uv (recommended)
 uv pip install .
 
-# Or for development
+# With semantic search support (optional, adds ~500MB dependencies)
+uv pip install ".[semantic]"
+
+# For development (includes all features)
 uv pip install -e ".[dev]"
 ```
 
@@ -30,6 +33,10 @@ cvec search "linux kernel"
 cvec search --vendor "Microsoft" "Windows"
 cvec search --severity critical
 cvec search "CWE-79"
+
+# Semantic search (natural language) - requires: pip install cvec[semantic]
+cvec search --semantic "memory corruption in image parsing"
+cvec search --semantic "authentication bypass in web applications"
 
 # Get details for a specific CVE
 cvec get CVE-2024-1234
@@ -62,13 +69,17 @@ For advanced users who want to build the database locally:
 
 ```bash
 # Download raw JSON files
-cvec db download-json
-cvec db download-json --years 5
-cvec db download-json --all  # Include CAPEC/CWE
+cvec db build download-json
+cvec db build download-json --years 5
+cvec db build download-json --all  # Include CAPEC/CWE
 
 # Extract JSON to parquet
-cvec db extract-parquet
-cvec db extract-parquet --verbose
+cvec db build extract-parquet
+cvec db build extract-parquet --verbose
+
+# Generate embeddings for semantic search
+cvec db build extract-embeddings
+cvec db build extract-embeddings --batch-size 512
 ```
 
 ### Search
@@ -106,6 +117,39 @@ cvec search "linux" --output results.json --format json
 
 # Limit results
 cvec search "linux" --limit 50
+```
+
+### Semantic Search
+
+Semantic search uses natural language to find CVEs with similar meaning, even if the exact words don't match. This is powered by the `all-MiniLM-L6-v2` model via [fastembed](https://github.com/qdrant/fastembed).
+
+**Note:** Semantic search requires the optional `semantic` dependencies:
+
+```bash
+# Install semantic search support
+pip install cvec[semantic]
+# or with uv:
+uv pip install cvec[semantic]
+```
+
+```bash
+# First, generate embeddings (one-time setup, ~10-60 min depending on dataset size)
+cvec db extract-embeddings
+
+# Search using natural language
+cvec search --semantic "memory corruption vulnerabilities in image processing"
+cvec search --semantic "privilege escalation through kernel race conditions"
+cvec search --semantic "SQL injection in web login forms"
+
+# Adjust minimum similarity threshold (default: 0.3)
+cvec search --semantic "buffer overflow" --min-similarity 0.5
+
+# Combine with other filters
+cvec search --semantic "remote code execution" --severity critical
+cvec search --semantic "authentication bypass" --after 2024-01-01
+
+# Output in different formats
+cvec search --semantic "XSS attacks" --format json
 ```
 
 ### Get
@@ -170,6 +214,53 @@ uv run pytest
 # Run with coverage
 uv run pytest --cov=cvec
 ```
+
+## Semantic Search
+
+cvec supports semantic (natural language) search using sentence embeddings. This allows you to search for CVEs using descriptive phrases rather than exact keywords.
+
+**This feature is optional** and requires additional dependencies (~500MB). Install with:
+
+```bash
+pip install cvec[semantic]
+# or with uv:
+uv pip install cvec[semantic]
+```
+
+### How it works
+
+1. CVE titles and descriptions are concatenated and encoded into dense vector embeddings using the `all-MiniLM-L6-v2` model via [fastembed](https://github.com/qdrant/fastembed).
+2. Your search query is encoded using the same model.
+3. CVEs are ranked by cosine similarity between the query and CVE embeddings.
+
+### Setup
+
+After installing the semantic dependencies, generate embeddings:
+
+```bash
+cvec db update                          # Download CVE database
+cvec db build extract-embeddings        # Generate embeddings (~10-60 min on CPU)
+```
+
+Alternatively, if the cvec-db repository provides pre-computed embeddings, they will be downloaded automatically when you have the semantic dependencies installed:
+
+```bash
+pip install cvec[semantic]        # Install semantic support
+cvec db update                    # Downloads database + embeddings
+```
+
+### Model Details
+
+- **Model**: `all-MiniLM-L6-v2`
+- **Embedding dimension**: 384
+- **Speed**: ~5× faster than larger models, suitable for CPU
+- **Training**: 1B+ sentence pairs for broad semantic understanding
+
+### Performance
+
+- Embedding generation: ~300k CVEs in under 1 hour on a multi-core CPU
+- Search queries: Near-instant (milliseconds)
+- Storage: ~500MB for embeddings parquet file
 
 ## License
 

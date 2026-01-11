@@ -4,17 +4,25 @@ This module provides a command-line interface for downloading, extracting,
 and searching CVE data from the cvelistV5 repository.
 
 Usage:
-    cvec db update               Update CVE database from pre-built parquet files
-    cvec db download-json        Download raw JSON files (advanced)
-    cvec db extract-parquet      Extract JSON to parquet locally (advanced)
-    cvec db status               Show database status
-    cvec search <query>          Search CVEs
-    cvec get <cve-id>            Get details for a specific CVE
-    cvec stats                   Show database statistics
+    cvec db update                     Update CVE database from pre-built parquet files
+    cvec db update --prerelease        Update from latest pre-release
+    cvec db status                     Show database status
+
+    cvec db build download-json        Download raw JSON files (advanced)
+    cvec db build extract-parquet      Extract JSON to parquet locally (advanced)
+    cvec db build extract-embeddings   Generate embeddings for semantic search
+    cvec db build create-manifest      Create manifest.json for distribution
+
+    cvec search <query>                Search CVEs (use --semantic for semantic search)
+    cvec get <cve-id>                  Get details for a specific CVE
+    cvec stats                         Show database statistics
 """
 
+import hashlib
 import json
 import re
+from datetime import datetime, timezone
+from pathlib import Path
 from typing import Optional
 
 import typer
@@ -22,9 +30,15 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
+from cvec import MANIFEST_SCHEMA_VERSION
 from cvec.core.config import Config
 from cvec.services.downloader import DownloadService
 from cvec.services.extractor import ExtractorService
+from cvec.services.embeddings import (
+    EmbeddingsService,
+    SemanticDependencyError,
+    is_semantic_available,
+)
 from cvec.services.artifact_fetcher import (
     ArtifactFetcher,
     ManifestIncompatibleError,
@@ -54,6 +68,14 @@ db_app = typer.Typer(
     no_args_is_help=True,
 )
 app.add_typer(db_app, name="db")
+
+# Build subcommand group for advanced/CI commands
+build_app = typer.Typer(
+    name="build",
+    help="Advanced commands for building CVE database from source (used by CI)",
+    no_args_is_help=True,
+)
+db_app.add_typer(build_app, name="build")
 
 console = Console()
 
@@ -268,8 +290,17 @@ def db_update(
     tag: Optional[str] = typer.Option(
         None, "--tag", "-t", help="Specific release tag to download"
     ),
+    prerelease: bool = typer.Option(
+        False, "--prerelease", "-p", help="Include pre-release versions"
+    ),
     repo: Optional[str] = typer.Option(
         None, "--repo", "-r", help="GitHub repo in 'owner/repo' format"
+    ),
+    data_dir: Optional[str] = typer.Option(
+        None,
+        "--data-dir",
+        "-d",
+        help="Override data directory (also used as download dir)",
     ),
 ) -> None:
     """Update CVE database from pre-built parquet files.
@@ -282,18 +313,24 @@ def db_update(
         cvec db update
         cvec db update --force
         cvec db update --tag v20260106
+        cvec db update --prerelease
+        cvec db update --data-dir /path/to/data
     """
-    config = Config()
+    data_path = Path(data_dir) if data_dir else None
+    config = Config(data_dir=data_path, download_dir=data_path)
     fetcher = ArtifactFetcher(config, repo=repo)
 
     try:
-        result = fetcher.update(tag=tag, force=force)
+        result = fetcher.update(tag=tag, force=force, include_prerelease=prerelease)
 
         if result["status"] == "up-to-date":
             console.print("[green]✓ Database is already up-to-date.[/green]")
         else:
             stats = result.get("stats", {})
-            console.print(f"[green]✓ Updated to {result['tag']}[/green]")
+            tag_display = result["tag"]
+            if result.get("is_prerelease"):
+                tag_display += " (pre-release)"
+            console.print(f"[green]✓ Updated to {tag_display}[/green]")
             console.print(f"  - CVEs: {stats.get('cves', 0)}")
             console.print(f"  - Downloaded {len(result['downloaded'])} files")
 
@@ -314,13 +351,19 @@ def db_update(
         raise typer.Exit(1)
 
 
-@db_app.command("download-json")
+@build_app.command("download-json")
 def db_download_json(
     years: int = typer.Option(
         None, "--years", "-y", help="Number of years to download (default: from config)"
     ),
     all_data: bool = typer.Option(
         False, "--all", "-a", help="Download all data (CVEs, CWEs, CAPECs)"
+    ),
+    data_dir: Optional[str] = typer.Option(
+        None,
+        "--data-dir",
+        "-d",
+        help="Override data and download directory",
     ),
 ) -> None:
     """Download raw CVE JSON files from GitHub.
@@ -332,11 +375,13 @@ def db_download_json(
     For most users, 'cvec db update' is faster and easier.
 
     Example:
-        cvec db download-json
-        cvec db download-json --years 5
-        cvec db download-json --all
+        cvec db build download-json
+        cvec db build download-json --years 5
+        cvec db build download-json --all
+        cvec db build download-json --data-dir /path/to/data
     """
-    config = Config()
+    data_path = Path(data_dir) if data_dir else None
+    config = Config(data_dir=data_path, download_dir=data_path)
     if years:
         config.default_years = years
 
@@ -367,32 +412,40 @@ def db_download_json(
     )
 
 
-@db_app.command("extract-parquet")
+@build_app.command("extract-parquet")
 def db_extract_parquet(
     years: int = typer.Option(
         None, "--years", "-y", help="Number of years to process (default: from config)"
     ),
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Show detailed output"),
+    data_dir: Optional[str] = typer.Option(
+        None,
+        "--data-dir",
+        "-d",
+        help="Override data and download directory",
+    ),
 ) -> None:
     """Extract CVE JSON files to parquet format.
 
     This converts the downloaded JSON files into optimized parquet files.
-    You must run 'cvec db download-json' first.
+    You must run 'cvec db build download-json' first.
 
     For most users, 'cvec db update' is faster and easier.
 
     Example:
-        cvec db extract-parquet
-        cvec db extract-parquet --years 5 --verbose
+        cvec db build extract-parquet
+        cvec db build extract-parquet --years 5 --verbose
+        cvec db build extract-parquet --data-dir /path/to/data
     """
-    config = Config()
+    data_path = Path(data_dir) if data_dir else None
+    config = Config(data_dir=data_path, download_dir=data_path)
     if years:
         config.default_years = years
 
     # Check if JSON files exist
     if not config.cve_dir.exists():
         console.print("[red]Error: No CVE JSON files found.[/red]")
-        console.print("[yellow]Hint: Run 'cvec db download-json' first.[/yellow]")
+        console.print("[yellow]Hint: Run 'cvec db build download-json' first.[/yellow]")
         raise typer.Exit(1)
 
     service = ExtractorService(config)
@@ -417,10 +470,228 @@ def db_extract_parquet(
     console.print("[bold green]✓ Extraction complete![/bold green]")
 
 
+@build_app.command("extract-embeddings")
+def db_extract_embeddings(
+    batch_size: int = typer.Option(
+        256, "--batch-size", "-b", help="Number of CVEs to process per batch"
+    ),
+    verbose: bool = typer.Option(False, "--verbose", "-v", help="Show detailed output"),
+    data_dir: Optional[str] = typer.Option(
+        None,
+        "--data-dir",
+        "-d",
+        help="Override data directory",
+    ),
+) -> None:
+    """Generate embeddings for semantic search.
+
+    This creates embeddings from CVE titles and descriptions using the
+    all-MiniLM-L6-v2 model via fastembed. These embeddings enable
+    semantic (natural language) search across CVEs.
+
+    Requires the 'semantic' optional dependency:
+        pip install 'cvec[semantic]'
+
+    You must have parquet data first - run 'cvec db update' or 'cvec db build extract-parquet'.
+
+    Example:
+        cvec db build extract-embeddings
+        cvec db build extract-embeddings --batch-size 512 --verbose
+        cvec db build extract-embeddings --data-dir /path/to/data
+    """
+    # Check for semantic dependency
+    if not is_semantic_available():
+        console.print("[red]Error: Semantic search dependencies not installed.[/red]")
+        console.print()
+        console.print("Install with:")
+        console.print("  [cyan]pip install cvec\\[semantic][/cyan]")
+        console.print("  [dim]or with uv:[/dim]")
+        console.print("  [cyan]uv pip install cvec\\[semantic][/cyan]")
+        raise typer.Exit(1)
+
+    data_path = Path(data_dir) if data_dir else None
+    config = Config(data_dir=data_path)
+
+    # Check if parquet files exist
+    if not config.cves_parquet.exists():
+        console.print("[red]Error: No CVE parquet data found.[/red]")
+        console.print(
+            "[yellow]Hint: Run 'cvec db update' or 'cvec db build extract-parquet' first.[/yellow]"
+        )
+        raise typer.Exit(1)
+
+    console.print("[blue]Generating embeddings for semantic search...[/blue]")
+    console.print(
+        "[dim]Using model: sentence-transformers/all-MiniLM-L6-v2 (via fastembed)[/dim]"
+    )
+
+    try:
+        service = EmbeddingsService(config, quiet=not verbose)
+        result = service.extract_embeddings(batch_size=batch_size)
+
+        console.print(f"[green]✓ Generated {result['count']} embeddings[/green]")
+        console.print(f"  - Model: {result['model']}")
+        console.print(f"  - Dimension: {result['dimension']}")
+        console.print(f"  - Saved to: {result['path']}")
+
+    except SemanticDependencyError as e:
+        console.print(f"[red]Error: {e}[/red]")
+        raise typer.Exit(1)
+    except Exception as e:
+        console.print(f"[red]Error generating embeddings: {e}[/red]")
+        raise typer.Exit(1)
+
+
+@build_app.command("create-manifest")
+def db_create_manifest(
+    data_dir: Optional[str] = typer.Option(
+        None,
+        "--data-dir",
+        "-d",
+        help="Override data directory containing parquet files",
+    ),
+    source: Optional[str] = typer.Option(
+        None,
+        "--source",
+        "-s",
+        help="Source identifier (e.g., 'ci', 'local', 'github-actions')",
+    ),
+    release_status: str = typer.Option(
+        "draft",
+        "--release-status",
+        "-r",
+        help="Release status: 'official', 'prerelease', or 'draft' (default: draft)",
+    ),
+    output: Optional[str] = typer.Option(
+        None,
+        "--output",
+        "-o",
+        help="Output path for manifest.json (default: <data-dir>/manifest.json)",
+    ),
+) -> None:
+    """Create manifest.json for distribution.
+
+    Generates a manifest file from the extracted parquet files. The manifest
+    includes file checksums, statistics, and metadata required for the
+    pre-built database distribution.
+
+    This command is primarily used by CI/CD pipelines to create release artifacts.
+
+    Example:
+        cvec db build create-manifest
+        cvec db build create-manifest --source github-actions --release-status official
+        cvec db build create-manifest --release-status prerelease
+        cvec db build create-manifest --data-dir /path/to/data --output manifest.json
+    """
+    import polars as pl
+
+    data_path = Path(data_dir) if data_dir else None
+    config = Config(data_dir=data_path)
+
+    # Check if parquet files exist
+    if not config.cves_parquet.exists():
+        console.print("[red]Error: No CVE parquet data found.[/red]")
+        console.print(
+            "[yellow]Hint: Run 'cvec db build extract-parquet' first.[/yellow]"
+        )
+        raise typer.Exit(1)
+
+    console.print("[blue]Creating manifest...[/blue]")
+
+    # List of parquet files to include in manifest
+    parquet_files = [
+        "cves.parquet",
+        "cve_descriptions.parquet",
+        "cve_metrics.parquet",
+        "cve_products.parquet",
+        "cve_versions.parquet",
+        "cve_cwes.parquet",
+        "cve_references.parquet",
+        "cve_credits.parquet",
+        "cve_tags.parquet",
+    ]
+
+    # Optionally include embeddings if they exist
+    embeddings_path = config.data_dir / "cve_embeddings.parquet"
+    if embeddings_path.exists():
+        parquet_files.append("cve_embeddings.parquet")
+
+    # Build files list with checksums
+    files_info = []
+    for filename in parquet_files:
+        file_path = config.data_dir / filename
+        if file_path.exists():
+            # Calculate SHA256
+            sha256 = hashlib.sha256()
+            with open(file_path, "rb") as f:
+                for chunk in iter(lambda: f.read(8192), b""):
+                    sha256.update(chunk)
+
+            files_info.append(
+                {
+                    "name": filename,
+                    "sha256": sha256.hexdigest(),
+                    "size": file_path.stat().st_size,
+                }
+            )
+        else:
+            console.print(f"[yellow]Warning: {filename} not found, skipping[/yellow]")
+
+    # Gather stats from CVEs parquet
+    stats = {}
+    try:
+        df_cves = pl.read_parquet(config.cves_parquet)
+        stats["cves"] = len(df_cves)
+    except Exception as e:
+        console.print(f"[yellow]Warning: Could not read CVEs stats: {e}[/yellow]")
+
+    # Validate release_status
+    valid_statuses = ["official", "prerelease", "draft"]
+    if release_status not in valid_statuses:
+        console.print(
+            f"[red]Error: Invalid release status '{release_status}'. "
+            f"Must be one of: {', '.join(valid_statuses)}[/red]"
+        )
+        raise typer.Exit(1)
+
+    # Build manifest
+    manifest = {
+        "schema_version": MANIFEST_SCHEMA_VERSION,
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "release_status": release_status,
+        "stats": stats,
+        "files": files_info,
+    }
+
+    # Add source if provided
+    if source:
+        manifest["source"] = source
+
+    # Determine output path
+    output_path = Path(output) if output else config.data_dir / "manifest.json"
+
+    # Write manifest
+    output_path.write_text(json.dumps(manifest, indent=2))
+
+    console.print(f"[green]✓ Manifest created: {output_path}[/green]")
+    console.print(f"  - Schema version: {MANIFEST_SCHEMA_VERSION}")
+    console.print(f"  - Release status: {release_status}")
+    console.print(f"  - Files: {len(files_info)}")
+    console.print(f"  - CVEs: {stats.get('cves', 'unknown')}")
+    if source:
+        console.print(f"  - Source: {source}")
+
+
 @db_app.command("status")
 def db_status(
     repo: Optional[str] = typer.Option(
         None, "--repo", "-r", help="GitHub repo in 'owner/repo' format"
+    ),
+    data_dir: Optional[str] = typer.Option(
+        None,
+        "--data-dir",
+        "-d",
+        help="Override data directory",
     ),
 ) -> None:
     """Show database status and check for updates.
@@ -430,8 +701,10 @@ def db_status(
 
     Example:
         cvec db status
+        cvec db status --data-dir /path/to/data
     """
-    config = Config()
+    data_path = Path(data_dir) if data_dir else None
+    config = Config(data_dir=data_path)
     fetcher = ArtifactFetcher(config, repo=repo)
 
     console.print("[bold]CVE Database Status[/bold]\n")
@@ -450,6 +723,27 @@ def db_status(
     else:
         console.print("[yellow]⚠ No local database found[/yellow]")
         console.print("  Run 'cvec db update' to download the database.")
+
+    console.print()
+
+    # Semantic search capability status
+    if is_semantic_available():
+        embeddings_service = EmbeddingsService(config, quiet=True)
+        embeddings_stats = embeddings_service.get_stats()
+        if embeddings_stats:
+            console.print("[green]✓ Semantic search enabled[/green]")
+            console.print(f"  - Embeddings: {embeddings_stats['count']}")
+            console.print(f"  - Model: {embeddings_stats['model']}")
+        else:
+            console.print(
+                "[yellow]⚠ Semantic search available but no embeddings[/yellow]"
+            )
+            console.print(
+                "  Run 'cvec db build extract-embeddings' to generate embeddings."
+            )
+    else:
+        console.print("[dim]⚠ Semantic search not installed[/dim]")
+        console.print("  Install with: pip install cvec\\[semantic]")
 
     console.print()
 
@@ -485,7 +779,14 @@ def db_status(
 @app.command()
 def search(
     query: str = typer.Argument(
-        ..., help="Search query (product name, vendor, or CWE ID)"
+        ...,
+        help="Search query (product name, vendor, CWE ID, or natural language for semantic search)",
+    ),
+    semantic: bool = typer.Option(
+        False,
+        "--semantic",
+        "-m",
+        help="Use semantic (natural language) search instead of keyword matching",
     ),
     vendor: Optional[str] = typer.Option(
         None, "--vendor", "-V", help="Filter by vendor name"
@@ -517,6 +818,11 @@ def search(
     exact: bool = typer.Option(
         False, "--exact", "-e", help="Use exact literal matching (no regex)"
     ),
+    min_similarity: float = typer.Option(
+        0.3,
+        "--min-similarity",
+        help="Minimum similarity score for semantic search (0-1)",
+    ),
     limit: int = typer.Option(
         100, "--limit", "-n", help="Maximum number of results to show"
     ),
@@ -530,7 +836,11 @@ def search(
         None, "--output", "-o", help="Write output to file (no truncation when used)"
     ),
 ) -> None:
-    """Search CVEs by product name, vendor, or CWE ID."""
+    """Search CVEs by product name, vendor, CWE ID, or natural language.
+
+    Use --semantic for natural language semantic search (requires embeddings
+    and the 'semantic' optional dependency: pip install cvec[semantic]).
+    """
     config = Config()
     service = CVESearchService(config)
 
@@ -541,8 +851,39 @@ def search(
 
     query = query.strip()
 
+    # Semantic search mode
+    if semantic:
+        # Check if semantic dependencies are installed
+        if not is_semantic_available():
+            console.print(
+                "[red]Error: Semantic search dependencies not installed.[/red]"
+            )
+            console.print()
+            console.print("Install with:")
+            console.print("  [cyan]pip install cvec\\\\[semantic][/cyan]")
+            console.print("  [dim]or with uv:[/dim]")
+            console.print("  [cyan]uv pip install cvec\\\\[semantic][/cyan]")
+            raise typer.Exit(1)
+
+        if not service.has_embeddings():
+            console.print("[red]Error: Embeddings not found for semantic search.[/red]")
+            console.print(
+                "[yellow]Hint: Run 'cvec db build extract-embeddings' first.[/yellow]"
+            )
+            raise typer.Exit(1)
+
+        try:
+            result = service.semantic_search(
+                query, top_k=limit, min_similarity=min_similarity
+            )
+        except SemanticDependencyError as e:
+            console.print(f"[red]Error: {e}[/red]")
+            raise typer.Exit(1)
+        except Exception as e:
+            console.print(f"[red]Error in semantic search: {e}[/red]")
+            raise typer.Exit(1)
     # Auto-detect CVE ID format and redirect to get command behavior
-    if CVE_ID_PATTERN.match(query):
+    elif CVE_ID_PATTERN.match(query):
         result = service.by_id(query)
         if len(result.cves) == 0:
             console.print(f"[red]CVE not found: {query}[/red]")

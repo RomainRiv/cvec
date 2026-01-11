@@ -1,7 +1,8 @@
 """CVE search service.
 
 This service provides search capabilities over the normalized CVE parquet files.
-It supports searching by CVE ID, product, vendor, CWE, severity, and date range.
+It supports searching by CVE ID, product, vendor, CWE, severity, date range,
+and semantic similarity using embeddings.
 """
 
 import re
@@ -187,7 +188,7 @@ class CVESearchService:
             cves_path = self.config.cves_parquet
             if not cves_path.exists():
                 raise FileNotFoundError(
-                    f"CVE data not found at {cves_path}. Run 'cvec db update' or 'cvec db extract-parquet' first."
+                    f"CVE data not found at {cves_path}. Run 'cvec db update' or 'cvec db build extract-parquet' first."
                 )
             self._cves_df = pl.read_parquet(cves_path)
 
@@ -550,6 +551,80 @@ class CVESearchService:
         related = self._get_related_data(cve_ids)
 
         return SearchResult(result, **related)
+
+    def semantic_search(
+        self,
+        query: str,
+        top_k: int = 100,
+        min_similarity: float = 0.3,
+    ) -> SearchResult:
+        """Search CVEs using semantic similarity.
+
+        Uses sentence embeddings to find CVEs with semantically similar
+        titles and descriptions to the query.
+
+        Args:
+            query: Natural language search query.
+            top_k: Maximum number of results to return.
+            min_similarity: Minimum cosine similarity threshold (0-1).
+                           Default 0.3 filters out weak matches.
+
+        Returns:
+            SearchResult with semantically similar CVEs, ordered by similarity.
+
+        Raises:
+            FileNotFoundError: If embeddings have not been generated.
+            SemanticDependencyError: If semantic dependencies are not installed.
+        """
+        from cvec.services.embeddings import EmbeddingsService, is_semantic_available
+
+        if not is_semantic_available():
+            from cvec.services.embeddings import SemanticDependencyError
+
+            raise SemanticDependencyError("semantic search")
+
+        cves_df = self._ensure_cves_loaded()
+
+        # Perform semantic search
+        embeddings_service = EmbeddingsService(config=self.config, quiet=True)
+        similarity_results = embeddings_service.search(
+            query, top_k=top_k, min_similarity=min_similarity
+        )
+
+        if len(similarity_results) == 0:
+            return SearchResult(pl.DataFrame(schema=cves_df.schema))
+
+        # Get CVE IDs and their similarity scores
+        cve_ids = similarity_results.get_column("cve_id").to_list()
+        similarity_scores = dict(
+            zip(
+                similarity_results.get_column("cve_id").to_list(),
+                similarity_results.get_column("similarity_score").to_list(),
+            )
+        )
+
+        # Get CVE details
+        result = cves_df.filter(pl.col("cve_id").is_in(cve_ids))
+
+        # Add similarity score and sort by it
+        result = result.with_columns(
+            pl.col("cve_id")
+            .replace_strict(similarity_scores, default=0.0)
+            .alias("similarity_score")
+        )
+        result = result.sort("similarity_score", descending=True)
+
+        related = self._get_related_data(cve_ids)
+
+        return SearchResult(result, **related)
+
+    def has_embeddings(self) -> bool:
+        """Check if semantic search embeddings are available.
+
+        Returns:
+            True if embeddings file exists, False otherwise.
+        """
+        return self.config.cve_embeddings_parquet.exists()
 
     def recent(self, days: int = 30) -> SearchResult:
         """Get recently published CVEs.

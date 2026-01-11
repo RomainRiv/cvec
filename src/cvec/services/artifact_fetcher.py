@@ -27,6 +27,9 @@ SUPPORTED_SCHEMA_VERSION = MANIFEST_SCHEMA_VERSION
 # Default cvec-db repository
 DEFAULT_CVEC_DB_REPO = "RomainRiv/cvec-db"  # Update with actual repo
 
+# Files that require semantic search capability (optional)
+SEMANTIC_FILES = {"cve_embeddings.parquet"}
+
 
 class ManifestIncompatibleError(Exception):
     """Raised when the manifest schema version is incompatible."""
@@ -68,17 +71,33 @@ class ArtifactFetcher:
         self.repo = repo or os.environ.get("CVEC_DB_REPO", DEFAULT_CVEC_DB_REPO)
         self.config.ensure_directories()
 
-    def _get_latest_release(self) -> dict[str, Any]:
+    def _get_latest_release(self, include_prerelease: bool = False) -> dict[str, Any]:
         """Get the latest release from the cvec-db repository.
+
+        Args:
+            include_prerelease: If True, include pre-releases in search.
 
         Returns:
             Release metadata including tag_name and assets.
         """
-        url = f"https://api.github.com/repos/{self.repo}/releases/latest"
-        response = requests.get(url)
-        response.raise_for_status()
-        result: dict[str, Any] = response.json()
-        return result
+        if include_prerelease:
+            # Get all releases and find the latest (including pre-releases)
+            url = f"https://api.github.com/repos/{self.repo}/releases"
+            response = requests.get(url)
+            response.raise_for_status()
+            releases = response.json()
+            if not releases:
+                raise ValueError("No releases found")
+            # First release in the list is the latest (including pre-releases)
+            result: dict[str, Any] = releases[0]
+            return result
+        else:
+            # Get the latest official release only
+            url = f"https://api.github.com/repos/{self.repo}/releases/latest"
+            response = requests.get(url)
+            response.raise_for_status()
+            latest_result: dict[str, Any] = response.json()
+            return latest_result
 
     def _get_release_by_tag(self, tag: str) -> dict[str, Any]:
         """Get a specific release by tag.
@@ -151,11 +170,14 @@ class ArtifactFetcher:
                     f"expected {expected_sha256}, got {actual_sha256}"
                 )
 
-    def fetch_manifest(self, tag: Optional[str] = None) -> dict[str, Any]:
+    def fetch_manifest(
+        self, tag: Optional[str] = None, include_prerelease: bool = False
+    ) -> dict[str, Any]:
         """Fetch the manifest from a release.
 
         Args:
             tag: Release tag. If None, uses latest release.
+            include_prerelease: If True, include pre-releases when fetching latest.
 
         Returns:
             Parsed manifest dictionary.
@@ -163,7 +185,7 @@ class ArtifactFetcher:
         if tag:
             release = self._get_release_by_tag(tag)
         else:
-            release = self._get_latest_release()
+            release = self._get_latest_release(include_prerelease=include_prerelease)
 
         # Find manifest asset
         manifest_asset = None
@@ -212,11 +234,18 @@ class ArtifactFetcher:
             return result
         return None
 
-    def needs_update(self, remote_manifest: dict[str, Any]) -> bool:
+    def needs_update(
+        self,
+        remote_manifest: dict[str, Any],
+        remote_tag: str,
+        include_prerelease: bool,
+    ) -> bool:
         """Check if local database needs to be updated.
 
         Args:
             remote_manifest: Remote manifest to compare against.
+            remote_tag: Tag name of the remote release.
+            include_prerelease: Whether user wants pre-releases.
 
         Returns:
             True if update is needed.
@@ -225,7 +254,25 @@ class ArtifactFetcher:
         if not local_manifest:
             return True
 
-        # Compare generation timestamps
+        # Get release status from manifests
+        remote_status = remote_manifest.get("release_status", "draft")
+        local_status = local_manifest.get("release_status", "draft")
+
+        # If user wants official but has pre-release/draft, update
+        if (
+            not include_prerelease
+            and remote_status == "official"
+            and local_status != "official"
+        ):
+            return True
+
+        # If user wants pre-release but has different release, check by tag
+        local_tag = local_manifest.get("release_tag")
+        if local_tag and local_tag != remote_tag:
+            # Different tags means we should update
+            return True
+
+        # Same tag/status, compare timestamps as fallback
         local_time = local_manifest.get("generated_at", "")
         remote_time = remote_manifest.get("generated_at", "")
 
@@ -236,12 +283,14 @@ class ArtifactFetcher:
         self,
         tag: Optional[str] = None,
         force: bool = False,
+        include_prerelease: bool = False,
     ) -> dict:
         """Update local parquet files from the latest release.
 
         Args:
             tag: Specific release tag to download. If None, uses latest.
             force: If True, download even if local is up-to-date.
+            include_prerelease: If True, include pre-releases when fetching latest.
 
         Returns:
             Dictionary with update status and downloaded files.
@@ -253,7 +302,7 @@ class ArtifactFetcher:
         if tag:
             release = self._get_release_by_tag(tag)
         else:
-            release = self._get_latest_release()
+            release = self._get_latest_release(include_prerelease=include_prerelease)
 
         tag_name = release.get("tag_name", "unknown")
 
@@ -261,27 +310,45 @@ class ArtifactFetcher:
             print(f"Found release: {tag_name}")
 
         # Find and download manifest first
-        manifest = self.fetch_manifest(tag)
+        manifest = self.fetch_manifest(tag, include_prerelease=include_prerelease)
 
         # Check compatibility
         self.check_compatibility(manifest)
 
+        # Get release status from manifest
+        release_status = manifest.get("release_status", "draft")
+        is_prerelease = release_status == "prerelease"
+
         # Check if update is needed
-        if not force and not self.needs_update(manifest):
+        if not force and not self.needs_update(manifest, tag_name, include_prerelease):
             if not self.quiet:
                 print("Local database is already up-to-date.")
             return {"status": "up-to-date", "tag": tag_name, "downloaded": []}
+
+        # Check if semantic search is available for conditional downloads
+        try:
+            from cvec.services.embeddings import is_semantic_available
+
+            semantic_available = is_semantic_available()
+        except ImportError:
+            semantic_available = False
 
         # Build asset lookup
         assets_by_name = {asset["name"]: asset for asset in release.get("assets", [])}
 
         # Download parquet files with checksum verification
         downloaded = []
+        skipped_semantic = []
         files_info = manifest.get("files", [])
 
         for file_info in files_info:
             file_name = file_info["name"]
             expected_sha256 = file_info.get("sha256")
+
+            # Skip embedding files if semantic search is not installed
+            if file_name in SEMANTIC_FILES and not semantic_available:
+                skipped_semantic.append(file_name)
+                continue
 
             if file_name not in assets_by_name:
                 if not self.quiet:
@@ -302,18 +369,26 @@ class ArtifactFetcher:
             )
             downloaded.append(file_name)
 
-        # Save manifest locally
+        # Save manifest locally and store release tag for tracking
+        manifest["release_tag"] = tag_name
         manifest_path = self.config.data_dir / "manifest.json"
         manifest_path.write_text(json.dumps(manifest, indent=2))
         downloaded.append("manifest.json")
 
         if not self.quiet:
             print(f"Successfully downloaded {len(downloaded)} files.")
+            if skipped_semantic:
+                print(
+                    f"Skipped {len(skipped_semantic)} semantic search file(s) "
+                    "(install cvec[semantic] to enable)."
+                )
 
         return {
             "status": "updated",
             "tag": tag_name,
+            "is_prerelease": is_prerelease,
             "downloaded": downloaded,
+            "skipped_semantic": skipped_semantic,
             "stats": manifest.get("stats", {}),
         }
 
@@ -327,14 +402,20 @@ class ArtifactFetcher:
 
         try:
             remote_manifest = self.fetch_manifest()
+            remote_release = self._get_latest_release()
+            remote_tag = remote_release.get("tag_name", "unknown")
             remote_available = True
         except Exception:
             remote_manifest = None
+            remote_release = None
+            remote_tag = "unknown"
             remote_available = False
 
         needs_update = False
         if remote_available and remote_manifest is not None:
-            needs_update = local_manifest is None or self.needs_update(remote_manifest)
+            needs_update = local_manifest is None or self.needs_update(
+                remote_manifest, remote_tag, False
+            )
 
         return {
             "local": {
