@@ -60,6 +60,7 @@ def mock_manifest():
     return {
         "schema_version": SUPPORTED_SCHEMA_VERSION,
         "generated_at": "2026-01-08T12:00:00Z",
+        "release_status": "official",
         "files": [
             {"name": "cves.parquet", "sha256": "abc123"},
         ],
@@ -161,6 +162,44 @@ class TestGetLatestRelease:
             with pytest.raises(Exception):
                 fetcher._get_latest_release()
 
+    def test_get_latest_release_with_prerelease(self, fetcher):
+        """Test retrieval of latest release including pre-releases."""
+        with patch("requests.get") as mock_get:
+            mock_response = MagicMock()
+            # Mock a list of releases where first one is a pre-release
+            mock_response.json.return_value = [
+                {
+                    "tag_name": "v20260110-beta",
+                    "prerelease": True,
+                    "assets": [],
+                },
+                {
+                    "tag_name": "v20260108",
+                    "prerelease": False,
+                    "assets": [],
+                },
+            ]
+            mock_get.return_value = mock_response
+
+            result = fetcher._get_latest_release(include_prerelease=True)
+
+            assert result["tag_name"] == "v20260110-beta"
+            assert result["prerelease"] is True
+            # Should call /releases endpoint, not /releases/latest
+            assert "/releases/latest" not in mock_get.call_args[0][0]
+
+    def test_get_latest_release_without_prerelease(self, fetcher, mock_release):
+        """Test retrieval of latest official release only."""
+        with patch("requests.get") as mock_get:
+            mock_response = MagicMock()
+            mock_response.json.return_value = mock_release
+            mock_get.return_value = mock_response
+
+            result = fetcher._get_latest_release(include_prerelease=False)
+
+            # Should use /releases/latest endpoint
+            assert "/releases/latest" in mock_get.call_args[0][0]
+
 
 class TestGetReleaseByTag:
     """Test _get_release_by_tag method."""
@@ -232,29 +271,68 @@ class TestNeedsUpdate:
 
     def test_needs_update_no_local(self, fetcher, mock_manifest):
         """Test when no local manifest exists."""
-        assert fetcher.needs_update(mock_manifest) is True
+        assert fetcher.needs_update(mock_manifest, "v20260108", False) is True
 
     def test_needs_update_older_local(self, fetcher, mock_manifest):
         """Test when local manifest is older."""
         local_manifest = {
             "schema_version": SUPPORTED_SCHEMA_VERSION,
             "generated_at": "2026-01-01T12:00:00Z",
+            "release_tag": "v20260101",
+            "release_status": "official",
         }
         manifest_path = fetcher.config.data_dir / "manifest.json"
         manifest_path.write_text(json.dumps(local_manifest))
 
-        assert fetcher.needs_update(mock_manifest) is True
+        assert fetcher.needs_update(mock_manifest, "v20260108", False) is True
 
     def test_needs_update_newer_local(self, fetcher, mock_manifest):
         """Test when local manifest is newer."""
         local_manifest = {
             "schema_version": SUPPORTED_SCHEMA_VERSION,
             "generated_at": "2026-12-31T12:00:00Z",
+            "release_tag": "v20260108",
+            "release_status": "official",
         }
         manifest_path = fetcher.config.data_dir / "manifest.json"
         manifest_path.write_text(json.dumps(local_manifest))
 
-        assert fetcher.needs_update(mock_manifest) is False
+        assert fetcher.needs_update(mock_manifest, "v20260108", False) is False
+
+    def test_needs_update_switching_to_official(self, fetcher, mock_manifest):
+        """Test switching from pre-release to official release."""
+        local_manifest = {
+            "schema_version": SUPPORTED_SCHEMA_VERSION,
+            "generated_at": "2026-01-10T12:00:00Z",
+            "release_tag": "v20260110-beta",
+            "release_status": "prerelease",
+        }
+        manifest_path = fetcher.config.data_dir / "manifest.json"
+        manifest_path.write_text(json.dumps(local_manifest))
+
+        # Should update when switching from prerelease to official
+        assert fetcher.needs_update(mock_manifest, "v20260108", False) is True
+
+    def test_needs_update_switching_to_prerelease(self, fetcher):
+        """Test switching from official to pre-release."""
+        local_manifest = {
+            "schema_version": SUPPORTED_SCHEMA_VERSION,
+            "generated_at": "2026-01-08T12:00:00Z",
+            "release_tag": "v20260108",
+            "release_status": "official",
+        }
+        manifest_path = fetcher.config.data_dir / "manifest.json"
+        manifest_path.write_text(json.dumps(local_manifest))
+
+        # Remote manifest is a prerelease
+        remote_manifest = {
+            "schema_version": SUPPORTED_SCHEMA_VERSION,
+            "generated_at": "2026-01-10T12:00:00Z",
+            "release_status": "prerelease",
+        }
+
+        # Should update to pre-release when explicitly requested
+        assert fetcher.needs_update(remote_manifest, "v20260110-beta", True) is True
 
 
 # =============================================================================

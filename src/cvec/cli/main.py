@@ -5,6 +5,7 @@ and searching CVE data from the cvelistV5 repository.
 
 Usage:
     cvec db update                     Update CVE database from pre-built parquet files
+    cvec db update --prerelease        Update from latest pre-release
     cvec db status                     Show database status
 
     cvec db build download-json        Download raw JSON files (advanced)
@@ -289,6 +290,9 @@ def db_update(
     tag: Optional[str] = typer.Option(
         None, "--tag", "-t", help="Specific release tag to download"
     ),
+    prerelease: bool = typer.Option(
+        False, "--prerelease", "-p", help="Include pre-release versions"
+    ),
     repo: Optional[str] = typer.Option(
         None, "--repo", "-r", help="GitHub repo in 'owner/repo' format"
     ),
@@ -309,6 +313,7 @@ def db_update(
         cvec db update
         cvec db update --force
         cvec db update --tag v20260106
+        cvec db update --prerelease
         cvec db update --data-dir /path/to/data
     """
     data_path = Path(data_dir) if data_dir else None
@@ -316,13 +321,16 @@ def db_update(
     fetcher = ArtifactFetcher(config, repo=repo)
 
     try:
-        result = fetcher.update(tag=tag, force=force)
+        result = fetcher.update(tag=tag, force=force, include_prerelease=prerelease)
 
         if result["status"] == "up-to-date":
             console.print("[green]✓ Database is already up-to-date.[/green]")
         else:
             stats = result.get("stats", {})
-            console.print(f"[green]✓ Updated to {result['tag']}[/green]")
+            tag_display = result["tag"]
+            if result.get("is_prerelease"):
+                tag_display += " (pre-release)"
+            console.print(f"[green]✓ Updated to {tag_display}[/green]")
             console.print(f"  - CVEs: {stats.get('cves', 0)}")
             console.print(f"  - Downloaded {len(result['downloaded'])} files")
 
@@ -548,6 +556,12 @@ def db_create_manifest(
         "-s",
         help="Source identifier (e.g., 'ci', 'local', 'github-actions')",
     ),
+    release_status: str = typer.Option(
+        "draft",
+        "--release-status",
+        "-r",
+        help="Release status: 'official', 'prerelease', or 'draft' (default: draft)",
+    ),
     output: Optional[str] = typer.Option(
         None,
         "--output",
@@ -565,7 +579,8 @@ def db_create_manifest(
 
     Example:
         cvec db build create-manifest
-        cvec db build create-manifest --source github-actions
+        cvec db build create-manifest --source github-actions --release-status official
+        cvec db build create-manifest --release-status prerelease
         cvec db build create-manifest --data-dir /path/to/data --output manifest.json
     """
     import polars as pl
@@ -630,10 +645,20 @@ def db_create_manifest(
     except Exception as e:
         console.print(f"[yellow]Warning: Could not read CVEs stats: {e}[/yellow]")
 
+    # Validate release_status
+    valid_statuses = ["official", "prerelease", "draft"]
+    if release_status not in valid_statuses:
+        console.print(
+            f"[red]Error: Invalid release status '{release_status}'. "
+            f"Must be one of: {', '.join(valid_statuses)}[/red]"
+        )
+        raise typer.Exit(1)
+
     # Build manifest
     manifest = {
         "schema_version": MANIFEST_SCHEMA_VERSION,
         "generated_at": datetime.now(timezone.utc).isoformat(),
+        "release_status": release_status,
         "stats": stats,
         "files": files_info,
     }
@@ -650,6 +675,7 @@ def db_create_manifest(
 
     console.print(f"[green]✓ Manifest created: {output_path}[/green]")
     console.print(f"  - Schema version: {MANIFEST_SCHEMA_VERSION}")
+    console.print(f"  - Release status: {release_status}")
     console.print(f"  - Files: {len(files_info)}")
     console.print(f"  - CVEs: {stats.get('cves', 'unknown')}")
     if source:
