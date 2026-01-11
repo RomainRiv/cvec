@@ -56,10 +56,6 @@ clean:
 run *ARGS:
     uv run cvec {{ARGS}}
 
-# Generate embeddings for semantic search
-embeddings:
-    uv run cvec db extract-embeddings
-
 # Full CI pipeline (format, check, test)
 ci: format-check typecheck test
 
