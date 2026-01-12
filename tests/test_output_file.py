@@ -143,8 +143,9 @@ class TestOutputFileMarkdown:
             # Verify Markdown structure
             assert "# CVE Search Results" in content
             assert "Found **" in content
-            assert "| CVE ID |" in content
-            assert "|--------|" in content
+            # New format uses headings for each CVE instead of tables
+            assert "### CVE-" in content
+            assert "**State:**" in content
 
         finally:
             Path(output_path).unlink(missing_ok=True)
