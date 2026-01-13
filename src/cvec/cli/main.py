@@ -606,9 +606,9 @@ def db_status(
 
 @app.command()
 def search(
-    query: str = typer.Argument(
+    query: Optional[str] = typer.Argument(
         None,
-        help="Search query (product name, vendor, CWE ID, CPE string, or natural language for semantic search)",
+        help="Search query (product name, vendor, CWE ID, CPE string, or natural language for semantic search). Optional when using --product, --vendor, or --cpe filters.",
     ),
     cpe: Optional[str] = typer.Option(
         None,
@@ -720,10 +720,26 @@ def search(
         except ValueError as e:
             console.print(f"[red]Error: {e}[/red]")
             raise typer.Exit(1)
+    # Product/vendor filter without query
+    elif (product or vendor) and not query:
+        # Search by product/vendor filter only
+        if product and vendor:
+            # Use the unified search with both filters
+            result = service.by_product(product, vendor=vendor, fuzzy=True, exact=True)
+        elif product:
+            result = service.by_product(product, fuzzy=True, exact=True)
+        elif vendor:
+            result = service.by_vendor(vendor, fuzzy=True, exact=True)
+        
+        # Apply version filter if specified
+        if version and result.count > 0:
+            result = service.filter_by_version(
+                result, version=version, vendor=vendor, product=product
+            )
     else:
-        # Validate non-empty query when not using CPE
+        # Validate non-empty query when not using filters
         if not query or not query.strip():
-            console.print("[red]Error: Search query or --cpe option required.[/red]")
+            console.print("[red]Error: Search query, --product, --vendor, or --cpe option required.[/red]")
             raise typer.Exit(1)
 
         query = query.strip()
@@ -811,7 +827,7 @@ def search(
                 raise typer.Exit(1)
 
         # Apply version filter for non-CPE searches (CPE already handles it)
-        if version and result.count > 0 and not query.lower().startswith("cpe:"):
+        if version and result.count > 0 and not (query and query.lower().startswith("cpe:")):
             result = service.filter_by_version(
                 result, version=version, vendor=vendor, product=product
             )

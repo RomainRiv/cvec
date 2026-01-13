@@ -211,8 +211,14 @@ class TestIsVersionAffected:
         )
 
     def test_no_upper_bound(self):
-        """No upper bound means all versions from start."""
+        """No upper bound with same major version means affected."""
+        # Same major version - should be affected
         assert is_version_affected(
+            "1.5.0",
+            version_start="1.0.0",
+        )
+        # Different major version - should NOT be affected
+        assert not is_version_affected(
             "99.0.0",
             version_start="1.0.0",
         )

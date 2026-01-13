@@ -246,10 +246,24 @@ def is_version_affected(
     # If we have range info and version is in range, it's affected
     # If no range info, we can't determine, so assume affected if status is "affected" or None
     if not less_than and not less_than_or_equal:
-        # No upper bound specified - only exact version match or all versions affected
+        # No upper bound specified
         if version_start:
-            # Specific version start, no end = all versions from start
-            return True
+            # Specific version start with no upper bound
+            # Only consider it affected if we're checking for an exact match or very close version
+            # This prevents "openssl-1.1.0" from matching "3.0.0"
+            start = parse_version(version_start)
+            # If check version equals the start version, it's affected
+            if check == start:
+                return True
+            # If check version is greater than start but they share the same major version, consider affected
+            # This handles cases like 1.1.0 affecting 1.1.1, but not 1.1.0 affecting 3.0.0
+            if check > start and len(check.parts) > 0 and len(start.parts) > 0:
+                # Check if major versions match
+                if check.parts[0] == start.parts[0]:
+                    # Same major version line - consider affected
+                    return True
+            # Different major version line - not affected
+            return False
         # No bounds at all - can't determine, assume affected if status indicates
         if status and status.lower() in ("affected", "unknown"):
             return True
