@@ -69,8 +69,9 @@ class TestParseVersion:
         """Parse version with letter suffix (e.g., 1.0a)."""
         v = parse_version("1.0a")
         assert v.parts == [1, 0]
-        assert v.prerelease is not None
-        assert "a" in v.prerelease
+        # Letter suffixes are now patch_suffix (post-release), not prerelease
+        assert v.patch_suffix is not None
+        assert "a" in v.patch_suffix
 
     def test_empty_version(self):
         """Empty version should default to 0."""

@@ -730,7 +730,7 @@ def search(
             result = service.by_product(product, fuzzy=True, exact=True)
         elif vendor:
             result = service.by_vendor(vendor, fuzzy=True, exact=True)
-        
+
         # Apply version filter if specified
         if version and result.count > 0:
             result = service.filter_by_version(
@@ -739,7 +739,9 @@ def search(
     else:
         # Validate non-empty query when not using filters
         if not query or not query.strip():
-            console.print("[red]Error: Search query, --product, --vendor, or --cpe option required.[/red]")
+            console.print(
+                "[red]Error: Search query, --product, --vendor, or --cpe option required.[/red]"
+            )
             raise typer.Exit(1)
 
         query = query.strip()
@@ -827,7 +829,11 @@ def search(
                 raise typer.Exit(1)
 
         # Apply version filter for non-CPE searches (CPE already handles it)
-        if version and result.count > 0 and not (query and query.lower().startswith("cpe:")):
+        if (
+            version
+            and result.count > 0
+            and not (query and query.lower().startswith("cpe:"))
+        ):
             result = service.filter_by_version(
                 result, version=version, vendor=vendor, product=product
             )

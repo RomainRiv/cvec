@@ -30,6 +30,14 @@ class VersionInfo:
     parts: List[int]
     prerelease: Optional[str] = None
     build: Optional[str] = None
+    # Patch suffix like 'a', 'b', 'c' (OpenSSL-style: 1.0.2a > 1.0.2)
+    patch_suffix: Optional[str] = None
+
+    def _normalize_prerelease(self) -> Optional[str]:
+        """Normalize prerelease for case-insensitive comparison."""
+        if self.prerelease is None:
+            return None
+        return self.prerelease.lower()
 
     def __lt__(self, other: "VersionInfo") -> bool:
         """Compare two versions."""
@@ -54,13 +62,28 @@ class VersionInfo:
             else:
                 return False
 
+        # Handle patch suffix (1.0.2 < 1.0.2a < 1.0.2b)
+        # Patch suffix is a POST-release indicator (different from prerelease)
+        if self.patch_suffix != other.patch_suffix:
+            if self.patch_suffix is None and other.patch_suffix is not None:
+                # No suffix < has suffix (1.0.2 < 1.0.2a)
+                return True
+            elif self.patch_suffix is not None and other.patch_suffix is None:
+                # Has suffix > no suffix (1.0.2a > 1.0.2)
+                return False
+            elif self.patch_suffix is not None and other.patch_suffix is not None:
+                # Compare suffixes lexicographically (a < b < c ...)
+                return self.patch_suffix.lower() < other.patch_suffix.lower()
+
         # Handle prerelease (prerelease < release)
-        if self.prerelease and not other.prerelease:
+        self_pre = self._normalize_prerelease()
+        other_pre = other._normalize_prerelease()
+        if self_pre and not other_pre:
             return True
-        if not self.prerelease and other.prerelease:
+        if not self_pre and other_pre:
             return False
-        if self.prerelease and other.prerelease:
-            return self.prerelease < other.prerelease
+        if self_pre and other_pre:
+            return self_pre < other_pre
 
         return False
 
@@ -85,7 +108,14 @@ class VersionInfo:
         if self_parts != other_parts:
             return False
 
-        return self.prerelease == other.prerelease
+        # Compare patch suffix (case-insensitive)
+        self_patch = self.patch_suffix.lower() if self.patch_suffix else None
+        other_patch = other.patch_suffix.lower() if other.patch_suffix else None
+        if self_patch != other_patch:
+            return False
+
+        # Compare prerelease (case-insensitive)
+        return self._normalize_prerelease() == other._normalize_prerelease()
 
 
 def parse_version(version_str: str) -> VersionInfo:
@@ -133,12 +163,16 @@ def parse_version(version_str: str) -> VersionInfo:
             version_str = version_str[: match.start()]
             break
 
-    # Handle letter suffixes like 1.0a, 1.0b2
+    # Handle letter suffixes like 1.0a, 1.0b2 (OpenSSL-style patch releases)
+    # These are POST-release patches, not pre-releases
+    # 1.0.2a > 1.0.2 (patch 'a' comes after the base release)
+    patch_suffix = None
     letter_suffix_match = re.search(r"([a-z])(\d*)$", version_str, re.IGNORECASE)
     if letter_suffix_match and not prerelease:
         letter = letter_suffix_match.group(1).lower()
         num = letter_suffix_match.group(2)
-        prerelease = f"-{letter}{num}"
+        # Store as patch suffix (post-release), not prerelease
+        patch_suffix = f"{letter}{num}"
         version_str = version_str[: letter_suffix_match.start()]
 
     # Parse numeric parts
@@ -161,6 +195,7 @@ def parse_version(version_str: str) -> VersionInfo:
         parts=parts,
         prerelease=prerelease,
         build=build,
+        patch_suffix=patch_suffix,
     )
 
 
