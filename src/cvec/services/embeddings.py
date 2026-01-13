@@ -368,7 +368,7 @@ class EmbeddingsService:
         if not embeddings_path.exists():
             raise FileNotFoundError(
                 f"Embeddings not found at {embeddings_path}. "
-                "Run 'cvec db build extract-embeddings' first."
+                "Run 'cvec db update --embeddings' to download or 'cvec db build extract-embeddings' to generate locally."
             )
 
         # Load embeddings

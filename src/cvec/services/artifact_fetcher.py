@@ -284,6 +284,7 @@ class ArtifactFetcher:
         tag: Optional[str] = None,
         force: bool = False,
         include_prerelease: bool = False,
+        include_embeddings: bool = False,
     ) -> dict:
         """Update local parquet files from the latest release.
 
@@ -291,6 +292,7 @@ class ArtifactFetcher:
             tag: Specific release tag to download. If None, uses latest.
             force: If True, download even if local is up-to-date.
             include_prerelease: If True, include pre-releases when fetching latest.
+            include_embeddings: If True, download embedding files for semantic search.
 
         Returns:
             Dictionary with update status and downloaded files.
@@ -325,14 +327,6 @@ class ArtifactFetcher:
                 print("Local database is already up-to-date.")
             return {"status": "up-to-date", "tag": tag_name, "downloaded": []}
 
-        # Check if semantic search is available for conditional downloads
-        try:
-            from cvec.services.embeddings import is_semantic_available
-
-            semantic_available = is_semantic_available()
-        except ImportError:
-            semantic_available = False
-
         # Build asset lookup
         assets_by_name = {asset["name"]: asset for asset in release.get("assets", [])}
 
@@ -345,8 +339,8 @@ class ArtifactFetcher:
             file_name = file_info["name"]
             expected_sha256 = file_info.get("sha256")
 
-            # Skip embedding files if semantic search is not installed
-            if file_name in SEMANTIC_FILES and not semantic_available:
+            # Skip embedding files unless explicitly requested
+            if file_name in SEMANTIC_FILES and not include_embeddings:
                 skipped_semantic.append(file_name)
                 continue
 
@@ -379,8 +373,8 @@ class ArtifactFetcher:
             print(f"Successfully downloaded {len(downloaded)} files.")
             if skipped_semantic:
                 print(
-                    f"Skipped {len(skipped_semantic)} semantic search file(s) "
-                    "(install cvec[semantic] to enable)."
+                    f"Skipped {len(skipped_semantic)} embedding file(s). "
+                    "Use 'cvec db update --embeddings' to download or 'cvec db build extract-embeddings' to generate locally."
                 )
 
         return {

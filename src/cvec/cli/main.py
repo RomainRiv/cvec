@@ -104,6 +104,9 @@ def db_update(
     prerelease: bool = typer.Option(
         False, "--prerelease", "-p", help="Include pre-release versions"
     ),
+    embeddings: bool = typer.Option(
+        False, "--embeddings", "-e", help="Download embeddings for semantic search"
+    ),
     repo: Optional[str] = typer.Option(
         None, "--repo", "-r", help="GitHub repo in 'owner/repo' format"
     ),
@@ -120,9 +123,13 @@ def db_update(
     parquet files from the cvec-db repository, which is much faster than
     downloading and processing raw JSON files.
 
+    By default, embeddings are not downloaded. Use --embeddings to download
+    them for semantic search support.
+
     Example:
         cvec db update
         cvec db update --force
+        cvec db update --embeddings
         cvec db update --tag v20260106
         cvec db update --prerelease
         cvec db update --data-dir /path/to/data
@@ -132,7 +139,12 @@ def db_update(
     fetcher = ArtifactFetcher(config, repo=repo)
 
     try:
-        result = fetcher.update(tag=tag, force=force, include_prerelease=prerelease)
+        result = fetcher.update(
+            tag=tag,
+            force=force,
+            include_prerelease=prerelease,
+            include_embeddings=embeddings,
+        )
 
         if result["status"] == "up-to-date":
             console.print("[green]✓ Database is already up-to-date.[/green]")
@@ -144,6 +156,11 @@ def db_update(
             console.print(f"[green]✓ Updated to {tag_display}[/green]")
             console.print(f"  - CVEs: {stats.get('cves', 0)}")
             console.print(f"  - Downloaded {len(result['downloaded'])} files")
+            if result.get("skipped_semantic"):
+                console.print()
+                console.print(
+                    "[dim]Tip: Use 'cvec db update --embeddings' to download embeddings for semantic search.[/dim]"
+                )
 
     except ManifestIncompatibleError as e:
         console.print(f"[red]Error: {e}[/red]")
@@ -729,6 +746,19 @@ def search(
 
         # Semantic search mode
         if search_mode == SearchMode.SEMANTIC:
+            # Check if embeddings are available
+            if not service.has_embeddings():
+                console.print(
+                    "[red]Error: Embeddings not found for semantic search.[/red]"
+                )
+                console.print()
+                console.print("Download embeddings with:")
+                console.print("  [cyan]cvec db update --embeddings[/cyan]")
+                console.print()
+                console.print("Or generate them locally with:")
+                console.print("  [cyan]cvec db build extract-embeddings[/cyan]")
+                raise typer.Exit(1)
+
             # Check if semantic dependencies are installed
             if not is_semantic_available():
                 console.print(
@@ -739,15 +769,6 @@ def search(
                 console.print("  [cyan]pip install cvec\\[semantic][/cyan]")
                 console.print("  [dim]or with uv:[/dim]")
                 console.print("  [cyan]uv pip install cvec\\[semantic][/cyan]")
-                raise typer.Exit(1)
-
-            if not service.has_embeddings():
-                console.print(
-                    "[red]Error: Embeddings not found for semantic search.[/red]"
-                )
-                console.print(
-                    "[yellow]Hint: Run 'cvec db build extract-embeddings' first.[/yellow]"
-                )
                 raise typer.Exit(1)
 
             try:
