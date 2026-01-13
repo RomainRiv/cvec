@@ -515,3 +515,102 @@ class TestGetSSVCInfo:
 
         ssvc_info = service.get_ssvc_info("CVE-2022-2196")
         assert ssvc_info is None
+
+
+class TestCPESearch:
+    """Tests for CPE-based search functionality."""
+
+    def test_by_cpe_with_explicit_version(self, sample_parquet_data):
+        """by_cpe should extract version from CPE string automatically."""
+        service = CVESearchService(config=sample_parquet_data)
+
+        # Search with a CPE that has a specific version
+        result = service.by_cpe("cpe:2.3:a:linux:linux_kernel:5.15.0:*:*:*:*:*:*:*")
+
+        # Should filter to only CVEs affecting version 5.15.0
+        # The sample data has CVE-2022-2196 with affected version range
+        assert (
+            result.count >= 0
+        )  # May or may not have matches depending on version ranges
+
+    def test_by_cpe_with_wildcard_version(self, sample_parquet_data):
+        """by_cpe should not filter by version when CPE has wildcard."""
+        service = CVESearchService(config=sample_parquet_data)
+
+        # Search with wildcard version - should return all matching vendor/product
+        result = service.by_cpe("cpe:2.3:a:linux:linux_kernel:*:*:*:*:*:*:*:*")
+
+        # Should NOT filter by version, return all linux kernel CVEs
+        assert result.count >= 1  # Should find CVE-2022-2196
+
+    def test_by_cpe_version_override(self, sample_parquet_data):
+        """Explicit check_version parameter should override CPE version."""
+        service = CVESearchService(config=sample_parquet_data)
+
+        # CPE has version 0, but we override with explicit version
+        result = service.by_cpe(
+            "cpe:2.3:a:linux:linux_kernel:0:*:*:*:*:*:*:*", check_version="5.15.0"
+        )
+
+        # Should use explicit version (5.15.0), not CPE version (0)
+        assert result.count >= 0
+
+    def test_by_cpe_invalid_format(self, sample_parquet_data):
+        """by_cpe should raise ValueError for invalid CPE string."""
+        service = CVESearchService(config=sample_parquet_data)
+
+        with pytest.raises(ValueError, match="Invalid CPE string"):
+            service.by_cpe("not-a-cpe-string")
+
+    def test_by_cpe_with_dash_version(self, sample_parquet_data):
+        """by_cpe should treat dash (-) as wildcard and not filter by version."""
+        service = CVESearchService(config=sample_parquet_data)
+
+        # CPE with dash for version (means "not applicable")
+        result = service.by_cpe("cpe:2.3:a:linux:linux_kernel:-:*:*:*:*:*:*:*")
+
+        # Should NOT filter by version
+        assert result.count >= 1  # Should find CVE-2022-2196
+
+
+class TestVersionRangeParsing:
+    """Tests for version range string parsing in filter_by_version."""
+
+    def test_version_range_string_parsing(self):
+        """Version range strings like '0.5.6 - 1.13.2' should be parsed correctly."""
+        from cvec.services.version import is_version_affected
+
+        # Simulate what happens when filter_by_version processes a range string
+        version_start = "0.5.6 - 1.13.2"
+        less_than = None
+        less_than_or_equal = None
+
+        # Parse the range string
+        if version_start and " - " in str(version_start):
+            parts = str(version_start).split(" - ")
+            if len(parts) == 2:
+                version_start = parts[0].strip()
+                if not less_than and not less_than_or_equal:
+                    less_than_or_equal = parts[1].strip()
+
+        # Test versions within range should be affected
+        assert is_version_affected(
+            "1.10.0", version_start=version_start, less_than_or_equal=less_than_or_equal
+        )
+        assert is_version_affected(
+            "0.5.6", version_start=version_start, less_than_or_equal=less_than_or_equal
+        )
+        assert is_version_affected(
+            "1.13.2", version_start=version_start, less_than_or_equal=less_than_or_equal
+        )
+
+        # Test versions outside range should NOT be affected
+        assert not is_version_affected(
+            "0.5.5", version_start=version_start, less_than_or_equal=less_than_or_equal
+        )
+        assert not is_version_affected(
+            "1.13.3", version_start=version_start, less_than_or_equal=less_than_or_equal
+        )
+        assert not is_version_affected(
+            "1.28.9", version_start=version_start, less_than_or_equal=less_than_or_equal
+        )

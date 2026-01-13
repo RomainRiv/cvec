@@ -590,8 +590,20 @@ def db_status(
 @app.command()
 def search(
     query: str = typer.Argument(
-        ...,
-        help="Search query (product name, vendor, CWE ID, or natural language for semantic search)",
+        None,
+        help="Search query (product name, vendor, CWE ID, CPE string, or natural language for semantic search)",
+    ),
+    cpe: Optional[str] = typer.Option(
+        None,
+        "--cpe",
+        "-c",
+        help="Search by CPE string (e.g., cpe:2.3:a:apache:http_server:*:*:*:*:*:*:*:*)",
+    ),
+    version: Optional[str] = typer.Option(
+        None,
+        "--version",
+        "-e",
+        help="Filter by version (only show CVEs affecting this version)",
     ),
     mode: Optional[str] = typer.Option(
         None,
@@ -656,13 +668,18 @@ def search(
         None, "--output", "-o", help="Write output to file (no truncation when used)"
     ),
 ) -> None:
-    """Search CVEs by product name, vendor, CWE ID, or natural language.
+    """Search CVEs by product name, vendor, CWE ID, CPE, or natural language.
 
     Search Modes:
     - fuzzy (default): Case-insensitive substring matching
     - strict: Exact case-insensitive match
     - regex: Regular expression pattern matching
     - semantic: Natural language AI-powered search (requires embeddings)
+
+    CPE Search:
+    Search by CPE (Common Platform Enumeration) string to find vulnerabilities
+    for specific software. Use --version to filter to only CVEs that affect
+    your specific version.
 
     Examples:
         cvec search "linux kernel"              # Fuzzy search (default)
@@ -672,85 +689,111 @@ def search(
         cvec search "windows" -V microsoft      # Filter by vendor
         cvec search "chrome" -p browser         # Filter by product
         cvec search "apache" -d                 # Show with descriptions
+        cvec search --cpe "cpe:2.3:a:apache:http_server:*:*:*:*:*:*:*:*"  # CPE search
+        cvec search --cpe "cpe:2.3:a:apache:http_server:*:*:*:*:*:*:*:*" --version 2.4.51  # Version filter
+        cvec search "apache" --version 2.4.51   # Filter by version
     """
     config = Config()
     service = CVESearchService(config)
 
-    # Validate non-empty query
-    if not query or not query.strip():
-        console.print("[red]Error: Search query cannot be empty.[/red]")
-        raise typer.Exit(1)
-
-    query = query.strip()
-
-    # Determine search mode
-    search_mode = SearchMode.FUZZY  # Default
-    if semantic or mode == "semantic":
-        search_mode = SearchMode.SEMANTIC
-    elif mode == "strict":
-        search_mode = SearchMode.STRICT
-    elif mode == "regex":
-        search_mode = SearchMode.REGEX
-    elif mode == "fuzzy" or mode is None:
-        search_mode = SearchMode.FUZZY
-    elif mode:
-        console.print(
-            f"[red]Invalid mode: {mode}. Must be: strict, regex, fuzzy, semantic[/red]"
-        )
-        raise typer.Exit(1)
-
-    # Semantic search mode
-    if search_mode == SearchMode.SEMANTIC:
-        # Check if semantic dependencies are installed
-        if not is_semantic_available():
-            console.print(
-                "[red]Error: Semantic search dependencies not installed.[/red]"
-            )
-            console.print()
-            console.print("Install with:")
-            console.print("  [cyan]pip install cvec\\[semantic][/cyan]")
-            console.print("  [dim]or with uv:[/dim]")
-            console.print("  [cyan]uv pip install cvec\\[semantic][/cyan]")
-            raise typer.Exit(1)
-
-        if not service.has_embeddings():
-            console.print("[red]Error: Embeddings not found for semantic search.[/red]")
-            console.print(
-                "[yellow]Hint: Run 'cvec db build extract-embeddings' first.[/yellow]"
-            )
-            raise typer.Exit(1)
-
+    # CPE search takes precedence
+    if cpe:
         try:
-            result = service.semantic_search(
-                query, top_k=limit, min_similarity=min_similarity
-            )
-        except SemanticDependencyError as e:
-            console.print(f"[red]Error: {e}[/red]")
-            raise typer.Exit(1)
-        except Exception as e:
-            console.print(f"[red]Error in semantic search: {e}[/red]")
-            raise typer.Exit(1)
-    # Auto-detect CVE ID format and redirect to get command behavior
-    elif CVE_ID_PATTERN.match(query):
-        result = service.by_id(query)
-        if len(result.cves) == 0:
-            console.print(f"[red]CVE not found: {query}[/red]")
-            raise typer.Exit(1)
-    # Determine search type based on query format
-    elif query.upper().startswith("CWE"):
-        result = service.by_cwe(query)
-    else:
-        # Use the unified search method with mode
-        try:
-            result = service.search(
-                query,
-                mode=search_mode,
-                vendor=vendor,
-                product_filter=product,
-            )
+            result = service.by_cpe(cpe, check_version=version)
         except ValueError as e:
             console.print(f"[red]Error: {e}[/red]")
             raise typer.Exit(1)
+    else:
+        # Validate non-empty query when not using CPE
+        if not query or not query.strip():
+            console.print("[red]Error: Search query or --cpe option required.[/red]")
+            raise typer.Exit(1)
+
+        query = query.strip()
+
+        # Determine search mode
+        search_mode = SearchMode.FUZZY  # Default
+        if semantic or mode == "semantic":
+            search_mode = SearchMode.SEMANTIC
+        elif mode == "strict":
+            search_mode = SearchMode.STRICT
+        elif mode == "regex":
+            search_mode = SearchMode.REGEX
+        elif mode == "fuzzy" or mode is None:
+            search_mode = SearchMode.FUZZY
+        elif mode:
+            console.print(
+                f"[red]Invalid mode: {mode}. Must be: strict, regex, fuzzy, semantic[/red]"
+            )
+            raise typer.Exit(1)
+
+        # Semantic search mode
+        if search_mode == SearchMode.SEMANTIC:
+            # Check if semantic dependencies are installed
+            if not is_semantic_available():
+                console.print(
+                    "[red]Error: Semantic search dependencies not installed.[/red]"
+                )
+                console.print()
+                console.print("Install with:")
+                console.print("  [cyan]pip install cvec\\[semantic][/cyan]")
+                console.print("  [dim]or with uv:[/dim]")
+                console.print("  [cyan]uv pip install cvec\\[semantic][/cyan]")
+                raise typer.Exit(1)
+
+            if not service.has_embeddings():
+                console.print(
+                    "[red]Error: Embeddings not found for semantic search.[/red]"
+                )
+                console.print(
+                    "[yellow]Hint: Run 'cvec db build extract-embeddings' first.[/yellow]"
+                )
+                raise typer.Exit(1)
+
+            try:
+                result = service.semantic_search(
+                    query, top_k=limit, min_similarity=min_similarity
+                )
+            except SemanticDependencyError as e:
+                console.print(f"[red]Error: {e}[/red]")
+                raise typer.Exit(1)
+            except Exception as e:
+                console.print(f"[red]Error in semantic search: {e}[/red]")
+                raise typer.Exit(1)
+        # Auto-detect CVE ID format and redirect to get command behavior
+        elif CVE_ID_PATTERN.match(query):
+            result = service.by_id(query)
+            if len(result.cves) == 0:
+                console.print(f"[red]CVE not found: {query}[/red]")
+                raise typer.Exit(1)
+        # Auto-detect CPE format in query
+        elif query.lower().startswith("cpe:"):
+            try:
+                result = service.by_cpe(query, check_version=version)
+            except ValueError as e:
+                console.print(f"[red]Error: {e}[/red]")
+                raise typer.Exit(1)
+        # Determine search type based on query format
+        elif query.upper().startswith("CWE"):
+            result = service.by_cwe(query)
+        else:
+            # Use the unified search method with mode
+            try:
+                result = service.search(
+                    query,
+                    mode=search_mode,
+                    vendor=vendor,
+                    product_filter=product,
+                )
+            except ValueError as e:
+                console.print(f"[red]Error: {e}[/red]")
+                raise typer.Exit(1)
+
+        # Apply version filter for non-CPE searches (CPE already handles it)
+        if version and result.count > 0 and not query.lower().startswith("cpe:"):
+            result = service.filter_by_version(
+                result, version=version, vendor=vendor, product=product
+            )
 
     # Apply state filter
     if state:
@@ -906,7 +949,9 @@ def recent(
     detailed: bool = typer.Option(
         False, "--detailed", help="Show detailed output with descriptions"
     ),
-    verbose: bool = typer.Option(False, "--verbose", "-v", help="Show summary statistics"),
+    verbose: bool = typer.Option(
+        False, "--verbose", "-v", help="Show summary statistics"
+    ),
     output: Optional[str] = typer.Option(
         None, "--output", "-o", help="Write output to file (no truncation when used)"
     ),
@@ -989,9 +1034,7 @@ def products(
     elif mode == "fuzzy" or mode is None:
         search_mode = SearchMode.FUZZY
     elif mode:
-        console.print(
-            f"[red]Invalid mode: {mode}. Must be: strict, regex, fuzzy[/red]"
-        )
+        console.print(f"[red]Invalid mode: {mode}. Must be: strict, regex, fuzzy[/red]")
         raise typer.Exit(1)
 
     try:
