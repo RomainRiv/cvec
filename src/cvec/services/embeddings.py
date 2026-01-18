@@ -271,6 +271,7 @@ class EmbeddingsService:
         self,
         output_path: Optional[Path] = None,
         batch_size: int = DEFAULT_BATCH_SIZE,
+        years: Optional[int] = None,
     ) -> dict:
         """Extract embeddings from existing parquet files.
 
@@ -280,6 +281,7 @@ class EmbeddingsService:
         Args:
             output_path: Path to save embeddings parquet. Uses config default if None.
             batch_size: Number of texts to process per batch.
+            years: Number of years to process. If None, uses config default.
 
         Returns:
             Dictionary with extraction statistics.
@@ -296,6 +298,19 @@ class EmbeddingsService:
             )
 
         cves_df = pl.read_parquet(cves_path)
+
+        # Filter by year if specified
+        if years is not None:
+            from datetime import datetime
+
+            start_year, end_year = self.config.get_year_range(years)
+            # Filter CVEs based on their ID (CVE-YYYY-*)
+            cves_df = cves_df.filter(
+                pl.col("cve_id")
+                .str.slice(4, 4)
+                .cast(pl.Int32)
+                .is_between(start_year, end_year)
+            )
 
         if desc_path.exists():
             descriptions_df = pl.read_parquet(desc_path)

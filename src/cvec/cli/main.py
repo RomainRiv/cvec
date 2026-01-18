@@ -329,6 +329,9 @@ def db_extract_parquet(
 
 @build_app.command("extract-embeddings")
 def db_extract_embeddings(
+    years: int = typer.Option(
+        None, "--years", "-y", help="Number of years to process (default: from config)"
+    ),
     batch_size: int = typer.Option(
         256, "--batch-size", "-b", help="Number of CVEs to process per batch"
     ),
@@ -353,7 +356,7 @@ def db_extract_embeddings(
 
     Example:
         cvec db build extract-embeddings
-        cvec db build extract-embeddings --batch-size 512 --verbose
+        cvec db build extract-embeddings --years 5 --batch-size 512 --verbose
         cvec db build extract-embeddings --data-dir /path/to/data
     """
     # Check for semantic dependency
@@ -368,6 +371,8 @@ def db_extract_embeddings(
 
     data_path = Path(data_dir) if data_dir else None
     config = Config(data_dir=data_path)
+    if years:
+        config.default_years = years
 
     # Check if parquet files exist
     if not config.cves_parquet.exists():
@@ -384,7 +389,7 @@ def db_extract_embeddings(
 
     try:
         service = EmbeddingsService(config, quiet=not verbose)
-        result = service.extract_embeddings(batch_size=batch_size)
+        result = service.extract_embeddings(batch_size=batch_size, years=years)
 
         console.print(f"[green]✓ Generated {result['count']} embeddings[/green]")
         console.print(f"  - Model: {result['model']}")
