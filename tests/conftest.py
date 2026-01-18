@@ -242,7 +242,10 @@ SAMPLE_CVE_WITH_PURL = {
                 }
             ],
             "descriptions": [
-                {"lang": "en", "value": "Security vulnerability in Python requests library"}
+                {
+                    "lang": "en",
+                    "value": "Security vulnerability in Python requests library",
+                }
             ],
             "metrics": [
                 {

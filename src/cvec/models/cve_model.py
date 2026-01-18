@@ -28,8 +28,11 @@ from pydantic import (
 )
 
 
-class UriType(RootModel[AnyUrl]):
-    root: AnyUrl = Field(
+# NOTE: Changed from AnyUrl to str to allow Git SCP-style URIs like
+# git://git@gitlab.com:gitlab-org/gitlab.git which are valid Git URIs
+# but not strictly RFC 3986 compliant (the colon is interpreted as port separator)
+class UriType(RootModel[str]):
+    root: str = Field(
         ...,
         description='A universal resource identifier (URI), according to [RFC 3986](https://tools.ietf.org/html/rfc3986).',
     )
