@@ -66,28 +66,28 @@ CVE_ID_PATTERN = re.compile(r"^CVE-\d{4}-\d{4,}$", re.IGNORECASE)
 
 def normalize_date(date_str: str) -> str:
     """Normalize partial date inputs to full YYYY-MM-DD format.
-    
+
     Args:
         date_str: Date string in format YYYY, YYYY-MM, or YYYY-MM-DD
-        
+
     Returns:
         Full date string in YYYY-MM-DD format
-        
+
     Examples:
         "2024" -> "2024-01-01"
         "2024-06" -> "2024-06-01"
         "2024-06-15" -> "2024-06-15"
     """
     date_str = date_str.strip()
-    
+
     # Check if it's just a year (4 digits)
     if re.match(r"^\d{4}$", date_str):
         return f"{date_str}-01-01"
-    
+
     # Check if it's year-month (YYYY-MM)
     if re.match(r"^\d{4}-\d{2}$", date_str):
         return f"{date_str}-01"
-    
+
     # Already full date or invalid - return as-is (will be validated later)
     return date_str
 
@@ -697,10 +697,14 @@ def search(
         help="Filter by CVE state (published, rejected)",
     ),
     after: Optional[str] = typer.Option(
-        None, "--after", help="Only CVEs published after this date (YYYY, YYYY-MM, or YYYY-MM-DD)"
+        None,
+        "--after",
+        help="Only CVEs published after this date (YYYY, YYYY-MM, or YYYY-MM-DD)",
     ),
     before: Optional[str] = typer.Option(
-        None, "--before", help="Only CVEs published before this date (YYYY, YYYY-MM, or YYYY-MM-DD)"
+        None,
+        "--before",
+        help="Only CVEs published before this date (YYYY, YYYY-MM, or YYYY-MM-DD)",
     ),
     kev: bool = typer.Option(
         False,
@@ -913,7 +917,9 @@ def search(
             # Normalize partial dates (year or year-month) to full YYYY-MM-DD format
             normalized_after = normalize_date(after) if after else None
             normalized_before = normalize_date(before) if before else None
-            result = service.filter_by_date(result, after=normalized_after, before=normalized_before)
+            result = service.filter_by_date(
+                result, after=normalized_after, before=normalized_before
+            )
         except ValueError as e:
             console.print(f"[red]Error: {e}[/red]")
             raise typer.Exit(1)
