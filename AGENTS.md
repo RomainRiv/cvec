@@ -193,14 +193,12 @@ just typecheck
 - **requests** (>=2.32.3): HTTP library
 - **typer** (>=0.16.0): CLI framework
 - **rich** (>=14.0.0): Terminal formatting
-- **numpy** (>=2.0.0): Numerical operations
-- **fastembed** (>=0.5.0): Embeddings for semantic search
 
 ### Optional Dependencies
 
 ```toml
 [project.optional-dependencies]
-semantic = ["fastembed>=0.5.0"]  # For semantic search
+semantic = ["fastembed>=0.5.0", "numpy>=2.0.0"]  # For semantic search (~500MB)
 dev = ["pytest>=8.0.0", "pytest-cov>=4.1.0", "types-requests", "black", "mypy", ...]
 ```
 
@@ -436,7 +434,7 @@ just sync
 # Install semantic extras
 uv pip install -e ".[semantic]"
 # Generate embeddings
-just embeddings
+uv run cvec db build extract-embeddings
 ```
 
 ## Resources
@@ -465,3 +463,6 @@ just run search "linux"
 # Clean everything
 just clean
 ```
+
+
+ALWAYS read and understand relevant files before proposing code edits. Do not speculate about code you have not inspected. If the user references a specific file/path, you MUST open and inspect it before explaining or proposing fixes. Be rigorous and persistent in searching code for key facts. Thoroughly review the style, conventions, and abstractions of the codebase before implementing new features or abstractions.

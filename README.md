@@ -134,7 +134,7 @@ uv pip install cvec[semantic]
 
 ```bash
 # First, generate embeddings (one-time setup, ~10-60 min depending on dataset size)
-cvec db extract-embeddings
+cvec db build extract-embeddings
 
 # Search using natural language
 cvec search --semantic "memory corruption vulnerabilities in image processing"

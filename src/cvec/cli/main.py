@@ -982,7 +982,7 @@ def stats(
 
 @app.command()
 def recent(
-    days: int = typer.Option(30, "--days", "-d", help="Number of days to look back"),
+    days: int = typer.Option(30, "--days", "-D", help="Number of days to look back"),
     limit: int = typer.Option(
         50, "--limit", "-n", help="Maximum number of results to show"
     ),
@@ -990,7 +990,7 @@ def recent(
         "table", "--format", "-f", help="Output format: table, json, markdown"
     ),
     detailed: bool = typer.Option(
-        False, "--detailed", help="Show detailed output with descriptions"
+        False, "--detailed", "-d", help="Show detailed output with descriptions"
     ),
     verbose: bool = typer.Option(
         False, "--verbose", "-v", help="Show summary statistics"

@@ -162,13 +162,13 @@ class DownloadService:
     def extract_cves(self, years: Optional[int] = None) -> Path:
         """Extract CVE files from the downloaded zip archive.
 
-               Organizes CVEs by year and optionally filters to recent years.
+        Organizes CVEs by year and optionally filters to recent years.
 
-               Args:
-                   years: Number of years to include. If None, uses config default.
-        f
-               Returns:
-                   Path to the extraction directory.
+        Args:
+            years: Number of years to include. If None, uses config default.
+
+        Returns:
+            Path to the extraction directory.
         """
         zip_path = self.config.cve_zip
         dest_dir = self.config.cve_dir

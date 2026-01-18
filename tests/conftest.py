@@ -229,12 +229,14 @@ def temp_data_dir() -> Generator[Path, None, None]:
 @pytest.fixture
 def temp_config(temp_data_dir: Path) -> Config:
     """Create a Config pointing to temporary directories."""
-    # Create subdirectories - Config will derive cve_dir from data_dir
-    cve_dir = temp_data_dir / "cve_github" / "individual"
+    # Create download subdirectory for cve_dir (which derives from download_dir)
+    download_dir = temp_data_dir / "download"
+    cve_dir = download_dir / "cve_github" / "individual"
     cve_dir.mkdir(parents=True)
 
     config = Config(
         data_dir=temp_data_dir,
+        download_dir=download_dir,
     )
     return config
 

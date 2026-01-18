@@ -50,7 +50,7 @@ class Config:
     @property
     def cve_dir(self) -> Path:
         """Directory containing individual CVE JSON files."""
-        return self.data_dir / DEFAULT_CVE_SUBDIR
+        return self.download_dir / DEFAULT_CVE_SUBDIR
 
     @property
     def cves_parquet(self) -> Path:
