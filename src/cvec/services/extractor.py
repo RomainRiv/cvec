@@ -195,6 +195,7 @@ class CVEProduct(BaseModel):
     platforms: Optional[str] = None  # comma-separated
     default_status: Optional[str] = None
     cpes: Optional[str] = None  # comma-separated CPE strings
+    package_url: Optional[str] = None  # Package URL (PURL) identifier
 
 
 class CVEVersion(BaseModel):
@@ -651,6 +652,11 @@ def _extract_products_and_versions(
             cpe_list = [_get_value(c) for c in _get_iterable(prod.cpes)]
             cpes = ",".join([c for c in cpe_list if c])
 
+        # Package URL (PURL)
+        package_url = None
+        if hasattr(prod, "packageURL") and prod.packageURL:
+            package_url = _get_value(prod.packageURL)
+
         products.append(
             CVEProduct(
                 cve_id=cve_id,
@@ -667,6 +673,7 @@ def _extract_products_and_versions(
                 platforms=platforms,
                 default_status=default_status,
                 cpes=cpes,
+                package_url=package_url,
             )
         )
 
@@ -1244,6 +1251,7 @@ PRODUCT_SCHEMA = {
     "platforms": pl.Utf8,
     "default_status": pl.Utf8,
     "cpes": pl.Utf8,
+    "package_url": pl.Utf8,
 }
 
 VERSION_SCHEMA = {

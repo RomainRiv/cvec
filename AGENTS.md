@@ -227,9 +227,26 @@ cvec search "linux kernel"                    # Basic search
 cvec search --vendor "Microsoft" "Windows"    # Vendor filter
 cvec search --severity critical               # Severity filter
 cvec search --semantic "memory corruption"    # Semantic search (requires semantic extras)
+cvec search --purl "pkg:pypi/django"          # Package URL search (CVE schema 5.2+)
 cvec get CVE-2024-1234                       # Get specific CVE
 cvec stats                                    # Database statistics
 ```
+
+### Package URL (PURL) Search
+
+The CVE schema 5.2.0 introduced support for Package URLs (PURLs), which are standardized identifiers for software packages across different ecosystems. The `by_purl` search method allows searching for CVEs by Package URL.
+
+**PURL Format**: `pkg:<type>/<namespace>/<name>@<version>?<qualifiers>#<subpath>`
+
+**Supported package types** (examples):
+- `pkg:pypi/django` - Python packages
+- `pkg:npm/lodash` - Node.js packages
+- `pkg:maven/org.apache.xmlgraphics/batik-anim` - Maven packages
+- `pkg:gem/rails` - Ruby gems
+- `pkg:cargo/serde` - Rust crates
+- `pkg:github/owner/repo` - GitHub repositories
+
+Note: The PURL in CVE records should NOT include a version, as version information is stored separately in the versions array.
 
 ## Data Storage
 
@@ -239,7 +256,7 @@ cvec stats                                    # Database statistics
   - `cves.parquet`: Main CVE records
   - `cve_descriptions.parquet`: Descriptions
   - `cve_metrics.parquet`: CVSS metrics
-  - `cve_products.parquet`: Affected products
+  - `cve_products.parquet`: Affected products (including cpe and PURL)
   - `cve_cwes.parquet`: CWE mappings
   - etc.
 - `download/`: Raw downloaded files

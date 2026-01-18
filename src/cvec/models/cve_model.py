@@ -184,7 +184,7 @@ class ProgramFile(RootModel[constr(min_length=1, max_length=1024)]):
 
 class ProgramRoutine(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     name: constr(min_length=1, max_length=4096) = Field(
         ...,
@@ -214,7 +214,7 @@ class Platform(RootModel[constr(max_length=1024)]):
 
 class Change(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     at: Version = Field(..., description='The version at which a status change occurs.')
     status: Status = Field(
@@ -224,7 +224,7 @@ class Change(BaseModel):
 
 class Versions(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     version: Version = Field(
         ...,
@@ -256,7 +256,7 @@ class Versions(BaseModel):
 
 class Versions1(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     version: Version = Field(
         ...,
@@ -288,7 +288,7 @@ class Versions1(BaseModel):
 
 class Versions2(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     version: Version = Field(
         ...,
@@ -320,7 +320,7 @@ class Versions2(BaseModel):
 
 class Versions3(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     version: Version = Field(
         ...,
@@ -352,7 +352,7 @@ class Versions3(BaseModel):
 
 class Product(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     vendor: constr(min_length=1, max_length=512) | None = Field(
         None,
@@ -511,7 +511,7 @@ class State(Enum):
 
 class CveMetadataPublished(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     cveId: CveId = Field(
         ..., description='The CVE identifier that this record pertains to.'
@@ -551,7 +551,7 @@ class State1(Enum):
 
 class CveMetadataRejected(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     cveId: CveId = Field(
         ..., description='The CVE identifier that this record pertains to.'
@@ -587,7 +587,7 @@ class CveMetadataRejected(BaseModel):
 
 class ProviderMetadata(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     orgId: OrgId = Field(
         ..., description="The container provider's organizational UUID."
@@ -608,7 +608,7 @@ class Operator(Enum):
 
 class CpeMatch(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     vulnerable: bool
     criteria: Cpe23
@@ -627,7 +627,7 @@ class Affected(RootModel[list[Product]]):
 
 class SupportingMediaItem(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     type: constr(min_length=1, max_length=256) = Field(
         ...,
@@ -664,7 +664,7 @@ class Version27(Enum):
 
 class Other(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     type: constr(min_length=1, max_length=128) = Field(
         ..., description='Name of the non-standard impact metrics format used.'
@@ -780,7 +780,7 @@ class EnglishLanguage(
 
 class TaxonomyRelation(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     taxonomyId: constr(min_length=1, max_length=2048) = Field(
         ...,
@@ -797,7 +797,7 @@ class TaxonomyRelation(BaseModel):
 
 class TaxonomyMapping(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     taxonomyName: constr(min_length=1, max_length=128) = Field(
         ..., description='The name of the taxonomy, eg., ATT&CK, D3FEND, CWE, CVSS'
@@ -1384,7 +1384,7 @@ class VulnerabilityResponseEffortType(Enum):
 
 class Reference(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     url: UriType = Field(
         ...,
@@ -1409,7 +1409,7 @@ class CpeNode(BaseModel):
 
 class Description(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     lang: Language
     value: constr(min_length=1, max_length=4096) = Field(
@@ -1446,7 +1446,7 @@ class References(RootModel[list[Reference]]):
 
 class Impact(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     capecId: (
         constr(pattern=r'^CAPEC-[1-9][0-9]{0,4}$', min_length=7, max_length=11) | None
@@ -1465,7 +1465,7 @@ class Impacts(RootModel[list[Impact]]):
 
 class Scenario(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     lang: Language
     value: constr(min_length=1, max_length=4096) = Field(
@@ -1501,7 +1501,7 @@ class CvssV405(BaseModel):
 
 class CvssV406(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     version: Version1 = Field(..., description='CVSS Version')
     vectorString: constr(
@@ -1545,7 +1545,7 @@ class CvssV406(BaseModel):
 
 class CvssV407(CvssV401, CvssV406):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     version: Version1 = Field(..., description='CVSS Version')
     vectorString: constr(
@@ -1589,7 +1589,7 @@ class CvssV407(CvssV401, CvssV406):
 
 class CvssV408(CvssV402, CvssV406):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     version: Version1 = Field(..., description='CVSS Version')
     vectorString: constr(
@@ -1633,7 +1633,7 @@ class CvssV408(CvssV402, CvssV406):
 
 class CvssV409(CvssV403, CvssV406):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     version: Version1 = Field(..., description='CVSS Version')
     vectorString: constr(
@@ -1677,7 +1677,7 @@ class CvssV409(CvssV403, CvssV406):
 
 class CvssV4010(CvssV404, CvssV406):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     version: Version1 = Field(..., description='CVSS Version')
     vectorString: constr(
@@ -1721,7 +1721,7 @@ class CvssV4010(CvssV404, CvssV406):
 
 class CvssV4011(CvssV405, CvssV406):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     version: Version1 = Field(..., description='CVSS Version')
     vectorString: constr(
@@ -1765,7 +1765,7 @@ class CvssV4011(CvssV405, CvssV406):
 
 class CvssV4012(CvssV401, CvssV406):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     version: Version1 = Field(..., description='CVSS Version')
     vectorString: constr(
@@ -1809,7 +1809,7 @@ class CvssV4012(CvssV401, CvssV406):
 
 class CvssV4013(CvssV402, CvssV406):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     version: Version1 = Field(..., description='CVSS Version')
     vectorString: constr(
@@ -1853,7 +1853,7 @@ class CvssV4013(CvssV402, CvssV406):
 
 class CvssV4014(CvssV403, CvssV406):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     version: Version1 = Field(..., description='CVSS Version')
     vectorString: constr(
@@ -1897,7 +1897,7 @@ class CvssV4014(CvssV403, CvssV406):
 
 class CvssV4015(CvssV404, CvssV406):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     version: Version1 = Field(..., description='CVSS Version')
     vectorString: constr(
@@ -1941,7 +1941,7 @@ class CvssV4015(CvssV404, CvssV406):
 
 class CvssV4016(CvssV405, CvssV406):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     version: Version1 = Field(..., description='CVSS Version')
     vectorString: constr(
@@ -1985,7 +1985,7 @@ class CvssV4016(CvssV405, CvssV406):
 
 class CvssV4017(CvssV401, CvssV406):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     version: Version1 = Field(..., description='CVSS Version')
     vectorString: constr(
@@ -2029,7 +2029,7 @@ class CvssV4017(CvssV401, CvssV406):
 
 class CvssV4018(CvssV402, CvssV406):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     version: Version1 = Field(..., description='CVSS Version')
     vectorString: constr(
@@ -2073,7 +2073,7 @@ class CvssV4018(CvssV402, CvssV406):
 
 class CvssV4019(CvssV403, CvssV406):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     version: Version1 = Field(..., description='CVSS Version')
     vectorString: constr(
@@ -2117,7 +2117,7 @@ class CvssV4019(CvssV403, CvssV406):
 
 class CvssV4020(CvssV404, CvssV406):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     version: Version1 = Field(..., description='CVSS Version')
     vectorString: constr(
@@ -2161,7 +2161,7 @@ class CvssV4020(CvssV404, CvssV406):
 
 class CvssV4021(CvssV405, CvssV406):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     version: Version1 = Field(..., description='CVSS Version')
     vectorString: constr(
@@ -2245,7 +2245,7 @@ class CvssV40(
 
 class CvssV31(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     version: Version17 = Field(..., description='CVSS Version')
     vectorString: constr(
@@ -2283,7 +2283,7 @@ class CvssV31(BaseModel):
 
 class CvssV311(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     version: Version17 = Field(..., description='CVSS Version')
     vectorString: constr(
@@ -2321,7 +2321,7 @@ class CvssV311(BaseModel):
 
 class CvssV312(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     version: Version17 = Field(..., description='CVSS Version')
     vectorString: constr(
@@ -2359,7 +2359,7 @@ class CvssV312(BaseModel):
 
 class CvssV313(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     version: Version17 = Field(..., description='CVSS Version')
     vectorString: constr(
@@ -2397,7 +2397,7 @@ class CvssV313(BaseModel):
 
 class CvssV314(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     version: Version17 = Field(..., description='CVSS Version')
     vectorString: constr(
@@ -2435,7 +2435,7 @@ class CvssV314(BaseModel):
 
 class CvssV30(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     version: Version22 = Field(..., description='CVSS Version')
     vectorString: constr(
@@ -2473,7 +2473,7 @@ class CvssV30(BaseModel):
 
 class CvssV301(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     version: Version22 = Field(..., description='CVSS Version')
     vectorString: constr(
@@ -2511,7 +2511,7 @@ class CvssV301(BaseModel):
 
 class CvssV302(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     version: Version22 = Field(..., description='CVSS Version')
     vectorString: constr(
@@ -2549,7 +2549,7 @@ class CvssV302(BaseModel):
 
 class CvssV303(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     version: Version22 = Field(..., description='CVSS Version')
     vectorString: constr(
@@ -2587,7 +2587,7 @@ class CvssV303(BaseModel):
 
 class CvssV304(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     version: Version22 = Field(..., description='CVSS Version')
     vectorString: constr(
@@ -2625,7 +2625,7 @@ class CvssV304(BaseModel):
 
 class CvssV20(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     version: Version27 = Field(..., description='CVSS Version')
     vectorString: constr(
@@ -2652,7 +2652,7 @@ class CvssV20(BaseModel):
 
 class Metrics1(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     format: constr(min_length=1, max_length=64) | None = Field(
         None,
@@ -2708,7 +2708,7 @@ class CvssV40225(BaseModel):
 
 class CvssV40226(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     version: Version28 = Field(..., description='CVSS Version')
     vectorString: constr(
@@ -2752,7 +2752,7 @@ class CvssV40226(BaseModel):
 
 class CvssV40227(CvssV40221, CvssV40226):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     version: Version28 = Field(..., description='CVSS Version')
     vectorString: constr(
@@ -2796,7 +2796,7 @@ class CvssV40227(CvssV40221, CvssV40226):
 
 class CvssV40228(CvssV40222, CvssV40226):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     version: Version28 = Field(..., description='CVSS Version')
     vectorString: constr(
@@ -2840,7 +2840,7 @@ class CvssV40228(CvssV40222, CvssV40226):
 
 class CvssV40229(CvssV40223, CvssV40226):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     version: Version28 = Field(..., description='CVSS Version')
     vectorString: constr(
@@ -2884,7 +2884,7 @@ class CvssV40229(CvssV40223, CvssV40226):
 
 class CvssV402210(CvssV40224, CvssV40226):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     version: Version28 = Field(..., description='CVSS Version')
     vectorString: constr(
@@ -2928,7 +2928,7 @@ class CvssV402210(CvssV40224, CvssV40226):
 
 class CvssV402211(CvssV40225, CvssV40226):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     version: Version28 = Field(..., description='CVSS Version')
     vectorString: constr(
@@ -2972,7 +2972,7 @@ class CvssV402211(CvssV40225, CvssV40226):
 
 class CvssV402212(CvssV40221, CvssV40226):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     version: Version28 = Field(..., description='CVSS Version')
     vectorString: constr(
@@ -3016,7 +3016,7 @@ class CvssV402212(CvssV40221, CvssV40226):
 
 class CvssV402213(CvssV40222, CvssV40226):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     version: Version28 = Field(..., description='CVSS Version')
     vectorString: constr(
@@ -3060,7 +3060,7 @@ class CvssV402213(CvssV40222, CvssV40226):
 
 class CvssV402214(CvssV40223, CvssV40226):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     version: Version28 = Field(..., description='CVSS Version')
     vectorString: constr(
@@ -3104,7 +3104,7 @@ class CvssV402214(CvssV40223, CvssV40226):
 
 class CvssV402215(CvssV40224, CvssV40226):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     version: Version28 = Field(..., description='CVSS Version')
     vectorString: constr(
@@ -3148,7 +3148,7 @@ class CvssV402215(CvssV40224, CvssV40226):
 
 class CvssV402216(CvssV40225, CvssV40226):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     version: Version28 = Field(..., description='CVSS Version')
     vectorString: constr(
@@ -3192,7 +3192,7 @@ class CvssV402216(CvssV40225, CvssV40226):
 
 class CvssV402217(CvssV40221, CvssV40226):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     version: Version28 = Field(..., description='CVSS Version')
     vectorString: constr(
@@ -3236,7 +3236,7 @@ class CvssV402217(CvssV40221, CvssV40226):
 
 class CvssV402218(CvssV40222, CvssV40226):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     version: Version28 = Field(..., description='CVSS Version')
     vectorString: constr(
@@ -3280,7 +3280,7 @@ class CvssV402218(CvssV40222, CvssV40226):
 
 class CvssV402219(CvssV40223, CvssV40226):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     version: Version28 = Field(..., description='CVSS Version')
     vectorString: constr(
@@ -3324,7 +3324,7 @@ class CvssV402219(CvssV40223, CvssV40226):
 
 class CvssV402220(CvssV40224, CvssV40226):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     version: Version28 = Field(..., description='CVSS Version')
     vectorString: constr(
@@ -3368,7 +3368,7 @@ class CvssV402220(CvssV40224, CvssV40226):
 
 class CvssV402221(CvssV40225, CvssV40226):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     version: Version28 = Field(..., description='CVSS Version')
     vectorString: constr(
@@ -3452,7 +3452,7 @@ class CvssV4022(
 
 class CvssV315(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     version: Version44 = Field(..., description='CVSS Version')
     vectorString: constr(
@@ -3490,7 +3490,7 @@ class CvssV315(BaseModel):
 
 class CvssV316(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     version: Version44 = Field(..., description='CVSS Version')
     vectorString: constr(
@@ -3528,7 +3528,7 @@ class CvssV316(BaseModel):
 
 class CvssV317(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     version: Version44 = Field(..., description='CVSS Version')
     vectorString: constr(
@@ -3566,7 +3566,7 @@ class CvssV317(BaseModel):
 
 class CvssV318(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     version: Version44 = Field(..., description='CVSS Version')
     vectorString: constr(
@@ -3604,7 +3604,7 @@ class CvssV318(BaseModel):
 
 class CvssV319(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     version: Version44 = Field(..., description='CVSS Version')
     vectorString: constr(
@@ -3642,7 +3642,7 @@ class CvssV319(BaseModel):
 
 class CvssV305(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     version: Version49 = Field(..., description='CVSS Version')
     vectorString: constr(
@@ -3680,7 +3680,7 @@ class CvssV305(BaseModel):
 
 class CvssV306(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     version: Version49 = Field(..., description='CVSS Version')
     vectorString: constr(
@@ -3718,7 +3718,7 @@ class CvssV306(BaseModel):
 
 class CvssV307(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     version: Version49 = Field(..., description='CVSS Version')
     vectorString: constr(
@@ -3756,7 +3756,7 @@ class CvssV307(BaseModel):
 
 class CvssV308(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     version: Version49 = Field(..., description='CVSS Version')
     vectorString: constr(
@@ -3794,7 +3794,7 @@ class CvssV308(BaseModel):
 
 class CvssV309(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     version: Version49 = Field(..., description='CVSS Version')
     vectorString: constr(
@@ -3832,7 +3832,7 @@ class CvssV309(BaseModel):
 
 class CvssV201(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     version: Version54 = Field(..., description='CVSS Version')
     vectorString: constr(
@@ -3859,7 +3859,7 @@ class CvssV201(BaseModel):
 
 class Metrics2(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     format: constr(min_length=1, max_length=64) | None = Field(
         None,
@@ -3915,7 +3915,7 @@ class CvssV40235(BaseModel):
 
 class CvssV40236(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     version: Version55 = Field(..., description='CVSS Version')
     vectorString: constr(
@@ -3959,7 +3959,7 @@ class CvssV40236(BaseModel):
 
 class CvssV40237(CvssV40231, CvssV40236):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     version: Version55 = Field(..., description='CVSS Version')
     vectorString: constr(
@@ -4003,7 +4003,7 @@ class CvssV40237(CvssV40231, CvssV40236):
 
 class CvssV40238(CvssV40232, CvssV40236):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     version: Version55 = Field(..., description='CVSS Version')
     vectorString: constr(
@@ -4047,7 +4047,7 @@ class CvssV40238(CvssV40232, CvssV40236):
 
 class CvssV40239(CvssV40233, CvssV40236):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     version: Version55 = Field(..., description='CVSS Version')
     vectorString: constr(
@@ -4091,7 +4091,7 @@ class CvssV40239(CvssV40233, CvssV40236):
 
 class CvssV402310(CvssV40234, CvssV40236):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     version: Version55 = Field(..., description='CVSS Version')
     vectorString: constr(
@@ -4135,7 +4135,7 @@ class CvssV402310(CvssV40234, CvssV40236):
 
 class CvssV402311(CvssV40235, CvssV40236):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     version: Version55 = Field(..., description='CVSS Version')
     vectorString: constr(
@@ -4179,7 +4179,7 @@ class CvssV402311(CvssV40235, CvssV40236):
 
 class CvssV402312(CvssV40231, CvssV40236):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     version: Version55 = Field(..., description='CVSS Version')
     vectorString: constr(
@@ -4223,7 +4223,7 @@ class CvssV402312(CvssV40231, CvssV40236):
 
 class CvssV402313(CvssV40232, CvssV40236):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     version: Version55 = Field(..., description='CVSS Version')
     vectorString: constr(
@@ -4267,7 +4267,7 @@ class CvssV402313(CvssV40232, CvssV40236):
 
 class CvssV402314(CvssV40233, CvssV40236):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     version: Version55 = Field(..., description='CVSS Version')
     vectorString: constr(
@@ -4311,7 +4311,7 @@ class CvssV402314(CvssV40233, CvssV40236):
 
 class CvssV402315(CvssV40234, CvssV40236):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     version: Version55 = Field(..., description='CVSS Version')
     vectorString: constr(
@@ -4355,7 +4355,7 @@ class CvssV402315(CvssV40234, CvssV40236):
 
 class CvssV402316(CvssV40235, CvssV40236):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     version: Version55 = Field(..., description='CVSS Version')
     vectorString: constr(
@@ -4399,7 +4399,7 @@ class CvssV402316(CvssV40235, CvssV40236):
 
 class CvssV402317(CvssV40231, CvssV40236):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     version: Version55 = Field(..., description='CVSS Version')
     vectorString: constr(
@@ -4443,7 +4443,7 @@ class CvssV402317(CvssV40231, CvssV40236):
 
 class CvssV402318(CvssV40232, CvssV40236):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     version: Version55 = Field(..., description='CVSS Version')
     vectorString: constr(
@@ -4487,7 +4487,7 @@ class CvssV402318(CvssV40232, CvssV40236):
 
 class CvssV402319(CvssV40233, CvssV40236):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     version: Version55 = Field(..., description='CVSS Version')
     vectorString: constr(
@@ -4531,7 +4531,7 @@ class CvssV402319(CvssV40233, CvssV40236):
 
 class CvssV402320(CvssV40234, CvssV40236):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     version: Version55 = Field(..., description='CVSS Version')
     vectorString: constr(
@@ -4575,7 +4575,7 @@ class CvssV402320(CvssV40234, CvssV40236):
 
 class CvssV402321(CvssV40235, CvssV40236):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     version: Version55 = Field(..., description='CVSS Version')
     vectorString: constr(
@@ -4659,7 +4659,7 @@ class CvssV4023(
 
 class CvssV3110(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     version: Version71 = Field(..., description='CVSS Version')
     vectorString: constr(
@@ -4697,7 +4697,7 @@ class CvssV3110(BaseModel):
 
 class CvssV3111(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     version: Version71 = Field(..., description='CVSS Version')
     vectorString: constr(
@@ -4735,7 +4735,7 @@ class CvssV3111(BaseModel):
 
 class CvssV3112(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     version: Version71 = Field(..., description='CVSS Version')
     vectorString: constr(
@@ -4773,7 +4773,7 @@ class CvssV3112(BaseModel):
 
 class CvssV3113(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     version: Version71 = Field(..., description='CVSS Version')
     vectorString: constr(
@@ -4811,7 +4811,7 @@ class CvssV3113(BaseModel):
 
 class CvssV3114(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     version: Version71 = Field(..., description='CVSS Version')
     vectorString: constr(
@@ -4849,7 +4849,7 @@ class CvssV3114(BaseModel):
 
 class CvssV3010(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     version: Version76 = Field(..., description='CVSS Version')
     vectorString: constr(
@@ -4887,7 +4887,7 @@ class CvssV3010(BaseModel):
 
 class CvssV3011(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     version: Version76 = Field(..., description='CVSS Version')
     vectorString: constr(
@@ -4925,7 +4925,7 @@ class CvssV3011(BaseModel):
 
 class CvssV3012(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     version: Version76 = Field(..., description='CVSS Version')
     vectorString: constr(
@@ -4963,7 +4963,7 @@ class CvssV3012(BaseModel):
 
 class CvssV3013(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     version: Version76 = Field(..., description='CVSS Version')
     vectorString: constr(
@@ -5001,7 +5001,7 @@ class CvssV3013(BaseModel):
 
 class CvssV3014(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     version: Version76 = Field(..., description='CVSS Version')
     vectorString: constr(
@@ -5039,7 +5039,7 @@ class CvssV3014(BaseModel):
 
 class CvssV202(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     version: Version81 = Field(..., description='CVSS Version')
     vectorString: constr(
@@ -5066,7 +5066,7 @@ class CvssV202(BaseModel):
 
 class Metrics3(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     format: constr(min_length=1, max_length=64) | None = Field(
         None,
@@ -5122,7 +5122,7 @@ class CvssV40245(BaseModel):
 
 class CvssV40246(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     version: Version82 = Field(..., description='CVSS Version')
     vectorString: constr(
@@ -5166,7 +5166,7 @@ class CvssV40246(BaseModel):
 
 class CvssV40247(CvssV40241, CvssV40246):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     version: Version82 = Field(..., description='CVSS Version')
     vectorString: constr(
@@ -5210,7 +5210,7 @@ class CvssV40247(CvssV40241, CvssV40246):
 
 class CvssV40248(CvssV40242, CvssV40246):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     version: Version82 = Field(..., description='CVSS Version')
     vectorString: constr(
@@ -5254,7 +5254,7 @@ class CvssV40248(CvssV40242, CvssV40246):
 
 class CvssV40249(CvssV40243, CvssV40246):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     version: Version82 = Field(..., description='CVSS Version')
     vectorString: constr(
@@ -5298,7 +5298,7 @@ class CvssV40249(CvssV40243, CvssV40246):
 
 class CvssV402410(CvssV40244, CvssV40246):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     version: Version82 = Field(..., description='CVSS Version')
     vectorString: constr(
@@ -5342,7 +5342,7 @@ class CvssV402410(CvssV40244, CvssV40246):
 
 class CvssV402411(CvssV40245, CvssV40246):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     version: Version82 = Field(..., description='CVSS Version')
     vectorString: constr(
@@ -5386,7 +5386,7 @@ class CvssV402411(CvssV40245, CvssV40246):
 
 class CvssV402412(CvssV40241, CvssV40246):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     version: Version82 = Field(..., description='CVSS Version')
     vectorString: constr(
@@ -5430,7 +5430,7 @@ class CvssV402412(CvssV40241, CvssV40246):
 
 class CvssV402413(CvssV40242, CvssV40246):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     version: Version82 = Field(..., description='CVSS Version')
     vectorString: constr(
@@ -5474,7 +5474,7 @@ class CvssV402413(CvssV40242, CvssV40246):
 
 class CvssV402414(CvssV40243, CvssV40246):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     version: Version82 = Field(..., description='CVSS Version')
     vectorString: constr(
@@ -5518,7 +5518,7 @@ class CvssV402414(CvssV40243, CvssV40246):
 
 class CvssV402415(CvssV40244, CvssV40246):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     version: Version82 = Field(..., description='CVSS Version')
     vectorString: constr(
@@ -5562,7 +5562,7 @@ class CvssV402415(CvssV40244, CvssV40246):
 
 class CvssV402416(CvssV40245, CvssV40246):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     version: Version82 = Field(..., description='CVSS Version')
     vectorString: constr(
@@ -5606,7 +5606,7 @@ class CvssV402416(CvssV40245, CvssV40246):
 
 class CvssV402417(CvssV40241, CvssV40246):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     version: Version82 = Field(..., description='CVSS Version')
     vectorString: constr(
@@ -5650,7 +5650,7 @@ class CvssV402417(CvssV40241, CvssV40246):
 
 class CvssV402418(CvssV40242, CvssV40246):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     version: Version82 = Field(..., description='CVSS Version')
     vectorString: constr(
@@ -5694,7 +5694,7 @@ class CvssV402418(CvssV40242, CvssV40246):
 
 class CvssV402419(CvssV40243, CvssV40246):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     version: Version82 = Field(..., description='CVSS Version')
     vectorString: constr(
@@ -5738,7 +5738,7 @@ class CvssV402419(CvssV40243, CvssV40246):
 
 class CvssV402420(CvssV40244, CvssV40246):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     version: Version82 = Field(..., description='CVSS Version')
     vectorString: constr(
@@ -5782,7 +5782,7 @@ class CvssV402420(CvssV40244, CvssV40246):
 
 class CvssV402421(CvssV40245, CvssV40246):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     version: Version82 = Field(..., description='CVSS Version')
     vectorString: constr(
@@ -5866,7 +5866,7 @@ class CvssV4024(
 
 class CvssV3115(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     version: Version98 = Field(..., description='CVSS Version')
     vectorString: constr(
@@ -5904,7 +5904,7 @@ class CvssV3115(BaseModel):
 
 class CvssV3116(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     version: Version98 = Field(..., description='CVSS Version')
     vectorString: constr(
@@ -5942,7 +5942,7 @@ class CvssV3116(BaseModel):
 
 class CvssV3117(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     version: Version98 = Field(..., description='CVSS Version')
     vectorString: constr(
@@ -5980,7 +5980,7 @@ class CvssV3117(BaseModel):
 
 class CvssV3118(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     version: Version98 = Field(..., description='CVSS Version')
     vectorString: constr(
@@ -6018,7 +6018,7 @@ class CvssV3118(BaseModel):
 
 class CvssV3119(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     version: Version98 = Field(..., description='CVSS Version')
     vectorString: constr(
@@ -6056,7 +6056,7 @@ class CvssV3119(BaseModel):
 
 class CvssV3015(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     version: Version103 = Field(..., description='CVSS Version')
     vectorString: constr(
@@ -6094,7 +6094,7 @@ class CvssV3015(BaseModel):
 
 class CvssV3016(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     version: Version103 = Field(..., description='CVSS Version')
     vectorString: constr(
@@ -6132,7 +6132,7 @@ class CvssV3016(BaseModel):
 
 class CvssV3017(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     version: Version103 = Field(..., description='CVSS Version')
     vectorString: constr(
@@ -6170,7 +6170,7 @@ class CvssV3017(BaseModel):
 
 class CvssV3018(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     version: Version103 = Field(..., description='CVSS Version')
     vectorString: constr(
@@ -6208,7 +6208,7 @@ class CvssV3018(BaseModel):
 
 class CvssV3019(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     version: Version103 = Field(..., description='CVSS Version')
     vectorString: constr(
@@ -6246,7 +6246,7 @@ class CvssV3019(BaseModel):
 
 class CvssV203(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     version: Version108 = Field(..., description='CVSS Version')
     vectorString: constr(
@@ -6273,7 +6273,7 @@ class CvssV203(BaseModel):
 
 class Metrics4(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     format: constr(min_length=1, max_length=64) | None = Field(
         None,
@@ -6329,7 +6329,7 @@ class CvssV40255(BaseModel):
 
 class CvssV40256(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     version: Version109 = Field(..., description='CVSS Version')
     vectorString: constr(
@@ -6373,7 +6373,7 @@ class CvssV40256(BaseModel):
 
 class CvssV40257(CvssV40251, CvssV40256):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     version: Version109 = Field(..., description='CVSS Version')
     vectorString: constr(
@@ -6417,7 +6417,7 @@ class CvssV40257(CvssV40251, CvssV40256):
 
 class CvssV40258(CvssV40252, CvssV40256):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     version: Version109 = Field(..., description='CVSS Version')
     vectorString: constr(
@@ -6461,7 +6461,7 @@ class CvssV40258(CvssV40252, CvssV40256):
 
 class CvssV40259(CvssV40253, CvssV40256):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     version: Version109 = Field(..., description='CVSS Version')
     vectorString: constr(
@@ -6505,7 +6505,7 @@ class CvssV40259(CvssV40253, CvssV40256):
 
 class CvssV402510(CvssV40254, CvssV40256):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     version: Version109 = Field(..., description='CVSS Version')
     vectorString: constr(
@@ -6549,7 +6549,7 @@ class CvssV402510(CvssV40254, CvssV40256):
 
 class CvssV402511(CvssV40255, CvssV40256):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     version: Version109 = Field(..., description='CVSS Version')
     vectorString: constr(
@@ -6593,7 +6593,7 @@ class CvssV402511(CvssV40255, CvssV40256):
 
 class CvssV402512(CvssV40251, CvssV40256):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     version: Version109 = Field(..., description='CVSS Version')
     vectorString: constr(
@@ -6637,7 +6637,7 @@ class CvssV402512(CvssV40251, CvssV40256):
 
 class CvssV402513(CvssV40252, CvssV40256):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     version: Version109 = Field(..., description='CVSS Version')
     vectorString: constr(
@@ -6681,7 +6681,7 @@ class CvssV402513(CvssV40252, CvssV40256):
 
 class CvssV402514(CvssV40253, CvssV40256):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     version: Version109 = Field(..., description='CVSS Version')
     vectorString: constr(
@@ -6725,7 +6725,7 @@ class CvssV402514(CvssV40253, CvssV40256):
 
 class CvssV402515(CvssV40254, CvssV40256):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     version: Version109 = Field(..., description='CVSS Version')
     vectorString: constr(
@@ -6769,7 +6769,7 @@ class CvssV402515(CvssV40254, CvssV40256):
 
 class CvssV402516(CvssV40255, CvssV40256):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     version: Version109 = Field(..., description='CVSS Version')
     vectorString: constr(
@@ -6813,7 +6813,7 @@ class CvssV402516(CvssV40255, CvssV40256):
 
 class CvssV402517(CvssV40251, CvssV40256):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     version: Version109 = Field(..., description='CVSS Version')
     vectorString: constr(
@@ -6857,7 +6857,7 @@ class CvssV402517(CvssV40251, CvssV40256):
 
 class CvssV402518(CvssV40252, CvssV40256):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     version: Version109 = Field(..., description='CVSS Version')
     vectorString: constr(
@@ -6901,7 +6901,7 @@ class CvssV402518(CvssV40252, CvssV40256):
 
 class CvssV402519(CvssV40253, CvssV40256):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     version: Version109 = Field(..., description='CVSS Version')
     vectorString: constr(
@@ -6945,7 +6945,7 @@ class CvssV402519(CvssV40253, CvssV40256):
 
 class CvssV402520(CvssV40254, CvssV40256):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     version: Version109 = Field(..., description='CVSS Version')
     vectorString: constr(
@@ -6989,7 +6989,7 @@ class CvssV402520(CvssV40254, CvssV40256):
 
 class CvssV402521(CvssV40255, CvssV40256):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     version: Version109 = Field(..., description='CVSS Version')
     vectorString: constr(
@@ -7073,7 +7073,7 @@ class CvssV4025(
 
 class CvssV3120(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     version: Version125 = Field(..., description='CVSS Version')
     vectorString: constr(
@@ -7111,7 +7111,7 @@ class CvssV3120(BaseModel):
 
 class CvssV3121(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     version: Version125 = Field(..., description='CVSS Version')
     vectorString: constr(
@@ -7149,7 +7149,7 @@ class CvssV3121(BaseModel):
 
 class CvssV3122(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     version: Version125 = Field(..., description='CVSS Version')
     vectorString: constr(
@@ -7187,7 +7187,7 @@ class CvssV3122(BaseModel):
 
 class CvssV3123(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     version: Version125 = Field(..., description='CVSS Version')
     vectorString: constr(
@@ -7225,7 +7225,7 @@ class CvssV3123(BaseModel):
 
 class CvssV3124(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     version: Version125 = Field(..., description='CVSS Version')
     vectorString: constr(
@@ -7263,7 +7263,7 @@ class CvssV3124(BaseModel):
 
 class CvssV3020(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     version: Version130 = Field(..., description='CVSS Version')
     vectorString: constr(
@@ -7301,7 +7301,7 @@ class CvssV3020(BaseModel):
 
 class CvssV3021(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     version: Version130 = Field(..., description='CVSS Version')
     vectorString: constr(
@@ -7339,7 +7339,7 @@ class CvssV3021(BaseModel):
 
 class CvssV3022(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     version: Version130 = Field(..., description='CVSS Version')
     vectorString: constr(
@@ -7377,7 +7377,7 @@ class CvssV3022(BaseModel):
 
 class CvssV3023(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     version: Version130 = Field(..., description='CVSS Version')
     vectorString: constr(
@@ -7415,7 +7415,7 @@ class CvssV3023(BaseModel):
 
 class CvssV3024(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     version: Version130 = Field(..., description='CVSS Version')
     vectorString: constr(
@@ -7453,7 +7453,7 @@ class CvssV3024(BaseModel):
 
 class CvssV204(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     version: Version135 = Field(..., description='CVSS Version')
     vectorString: constr(
@@ -7480,7 +7480,7 @@ class CvssV204(BaseModel):
 
 class Metrics5(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     format: constr(min_length=1, max_length=64) | None = Field(
         None,
@@ -7549,7 +7549,7 @@ class Exploits(RootModel[list[Description]]):
 
 class TimelineItem(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     time: Timestamp = Field(
         ...,
@@ -7574,7 +7574,7 @@ class Timeline(RootModel[list[TimelineItem]]):
 
 class Credit(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     lang: Language = Field(
         ...,
@@ -7607,7 +7607,7 @@ class CpeApplicabilityElement(BaseModel):
 
 class CnaRejectedContainer(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     providerMetadata: ProviderMetadata
     rejectedReasons: Descriptions = Field(
@@ -7622,7 +7622,7 @@ class CnaRejectedContainer(BaseModel):
 
 class Description1(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     lang: Language
     description: constr(min_length=1, max_length=4096) = Field(
@@ -7642,7 +7642,7 @@ class Description1(BaseModel):
 
 class ProblemType(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     descriptions: list[Description1] = Field(..., min_length=1)
 
@@ -7657,14 +7657,14 @@ class ProblemTypes(RootModel[list[ProblemType]]):
 
 class Containers1(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     cna: CnaRejectedContainer
 
 
 class CveJsonRecordFormat2(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     dataType: DataType
     dataVersion: DataVersion
@@ -7677,7 +7677,7 @@ class CveJsonRecordFormat2(BaseModel):
 
 class CnaPublishedContainer(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     providerMetadata: ProviderMetadata
     dateAssigned: Timestamp | None = Field(
@@ -7712,7 +7712,7 @@ class CnaPublishedContainer(BaseModel):
 
 class AdpContainer(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     providerMetadata: ProviderMetadata
     datePublic: Timestamp | None = Field(
@@ -7743,7 +7743,7 @@ class AdpContainer(BaseModel):
 
 class Containers(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     cna: CnaPublishedContainer
     adp: list[AdpContainer] | None = Field(None, min_length=1)
@@ -7751,7 +7751,7 @@ class Containers(BaseModel):
 
 class CveJsonRecordFormat1(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra='ignore',
     )
     dataType: DataType
     dataVersion: DataVersion

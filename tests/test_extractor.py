@@ -290,3 +290,60 @@ class TestExtractSingleCVE:
         assert len(adp_metrics) >= 1
         assert adp_metrics[0].base_score == 9.8
         assert adp_metrics[0].source == "adp:CISA-ADP"
+
+    def test_extract_package_url(self):
+        """Test extracting Package URL (PURL) from CVE."""
+        from tests.conftest import SAMPLE_CVE_WITH_PURL
+
+        cve_model = CveJsonRecordFormat.model_validate(SAMPLE_CVE_WITH_PURL)
+        result = _extract_single_cve(cve_model)
+
+        # Should have a product with package_url
+        assert len(result.products) >= 1
+        products_with_purl = [p for p in result.products if p.package_url]
+        assert len(products_with_purl) >= 1
+        assert products_with_purl[0].package_url == "pkg:pypi/requests"
+
+    def test_extract_package_url_with_product_info(self):
+        """Test that PURL is extracted alongside product info."""
+        from tests.conftest import SAMPLE_CVE_WITH_PURL
+
+        cve_model = CveJsonRecordFormat.model_validate(SAMPLE_CVE_WITH_PURL)
+        result = _extract_single_cve(cve_model)
+
+        # Find the product with PURL
+        purl_product = next(
+            (p for p in result.products if p.package_url == "pkg:pypi/requests"), None
+        )
+        assert purl_product is not None
+        assert purl_product.vendor == "Python"
+        assert purl_product.product == "requests"
+
+
+class TestCVEProductWithPurl:
+    """Tests for CVEProduct model with Package URL."""
+
+    def test_product_with_purl(self):
+        """Test creating a product with Package URL."""
+        product = CVEProduct(
+            cve_id="CVE-2024-1234",
+            product_id="1",
+            vendor="Python",
+            product="requests",
+            package_url="pkg:pypi/requests",
+            source="cna",
+        )
+        assert product.package_url == "pkg:pypi/requests"
+        assert product.vendor == "Python"
+        assert product.product == "requests"
+
+    def test_product_without_purl(self):
+        """Test creating a product without Package URL."""
+        product = CVEProduct(
+            cve_id="CVE-2024-1234",
+            product_id="1",
+            vendor="Linux",
+            product="Linux Kernel",
+            source="cna",
+        )
+        assert product.package_url is None
