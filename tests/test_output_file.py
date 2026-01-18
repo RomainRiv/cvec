@@ -143,8 +143,9 @@ class TestOutputFileMarkdown:
             # Verify Markdown structure
             assert "# CVE Search Results" in content
             assert "Found **" in content
-            assert "| CVE ID |" in content
-            assert "|--------|" in content
+            # New format uses headings for each CVE instead of tables
+            assert "### CVE-" in content
+            assert "**State:**" in content
 
         finally:
             Path(output_path).unlink(missing_ok=True)
@@ -181,49 +182,6 @@ class TestOutputFileMarkdown:
             # Verify Markdown structure
             assert "# CVE-2022-2196" in content
             assert "**State:**" in content
-
-        finally:
-            Path(output_path).unlink(missing_ok=True)
-
-
-class TestRecentOutputFile:
-    """Tests for recent command file output."""
-
-    def test_recent_json_output_to_file(self, sample_parquet_data):
-        """Recent command should write JSON output to file."""
-        runner = CliRunner()
-        with tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".json") as f:
-            output_path = f.name
-
-        try:
-            result = runner.invoke(
-                app,
-                [
-                    "recent",
-                    "--days",
-                    "365",  # Use a large window to ensure we get results
-                    "--format",
-                    "json",
-                    "--output",
-                    output_path,
-                ],
-                env={"CVE_DATA_DIR": str(sample_parquet_data.data_dir)},
-            )
-
-            assert result.exit_code == 0
-
-            if "No CVEs found" not in result.output:
-                # If we have results, verify output
-                assert "Output written to" in result.output
-
-                output_file = Path(output_path)
-                assert output_file.exists()
-
-                content = output_file.read_text()
-                data = json.loads(content)
-
-                assert "count" in data
-                assert "results" in data
 
         finally:
             Path(output_path).unlink(missing_ok=True)

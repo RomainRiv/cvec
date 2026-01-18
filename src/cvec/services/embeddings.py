@@ -15,7 +15,6 @@ Note: This module requires the optional 'semantic' dependencies:
 
 from pathlib import Path
 from typing import TYPE_CHECKING, Callable, Generator, List, Optional, Tuple
-from fastembed import TextEmbedding
 
 import polars as pl
 from rich.progress import (
@@ -42,6 +41,7 @@ except ImportError as e:
     # Create placeholder for type hints
     if TYPE_CHECKING:
         import numpy as np
+        from fastembed import TextEmbedding
 
 
 class SemanticDependencyError(Exception):
@@ -104,7 +104,7 @@ class EmbeddingsService:
         self.config = config or get_config()
         self.model_name = model_name
         self.quiet = quiet
-        self._model = None
+        self._model: Optional["TextEmbedding"] = None
 
     def _get_model(self) -> "TextEmbedding":
         """Lazily load the fastembed model.
@@ -368,7 +368,7 @@ class EmbeddingsService:
         if not embeddings_path.exists():
             raise FileNotFoundError(
                 f"Embeddings not found at {embeddings_path}. "
-                "Run 'cvec db build extract-embeddings' first."
+                "Run 'cvec db update --embeddings' to download or 'cvec db build extract-embeddings' to generate locally."
             )
 
         # Load embeddings
