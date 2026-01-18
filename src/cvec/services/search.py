@@ -931,7 +931,7 @@ class CVESearchService:
         total_cves = len(cves_df)
 
         # Count by state
-        state_counts = cves_df.group_by("state").count().to_dicts()
+        state_counts = cves_df.group_by("state").len().to_dicts()
 
         # Count by year
         year_counts: dict[str, int] = {}
@@ -977,7 +977,7 @@ class CVESearchService:
 
         return {
             "total_cves": total_cves,
-            "states": {d["state"]: d["count"] for d in state_counts},
+            "states": {d["state"]: d["len"] for d in state_counts},
             "by_year": dict(sorted(year_counts.items())),
             "total_product_entries": product_count,
             "unique_products": unique_products,
@@ -1333,6 +1333,208 @@ class CVESearchService:
         related = self._get_related_data(cve_ids)
 
         return SearchResult(filtered_cves, **related)
+
+    def filter_by_cvss_score(
+        self,
+        result: SearchResult,
+        min_score: Optional[float] = None,
+        max_score: Optional[float] = None,
+    ) -> SearchResult:
+        """Filter an existing SearchResult by CVSS score range.
+
+        Args:
+            result: SearchResult to filter.
+            min_score: Minimum CVSS score (inclusive).
+            max_score: Maximum CVSS score (inclusive).
+
+        Returns:
+            New SearchResult with CVEs matching CVSS range.
+        """
+        if result.metrics is None or len(result.metrics) == 0:
+            return SearchResult(pl.DataFrame(schema=result.cves.schema))
+
+        if min_score is None and max_score is None:
+            return result
+
+        cve_ids_in_result = set(result.cves.get_column("cve_id").to_list())
+
+        cvss_metrics = result.metrics.filter(
+            pl.col("cve_id").is_in(cve_ids_in_result)
+            & pl.col("metric_type").str.starts_with("cvss")
+            & pl.col("base_score").is_not_null()
+        )
+
+        if len(cvss_metrics) == 0:
+            return SearchResult(pl.DataFrame(schema=result.cves.schema))
+
+        # Apply preference scoring (same as get_best_metric)
+        scored = cvss_metrics.with_columns(
+            [
+                pl.when(pl.col("source") == "cna")
+                .then(100)
+                .otherwise(0)
+                .alias("source_pref"),
+                pl.when(pl.col("metric_type") == "cvssV4_0")
+                .then(40)
+                .when(pl.col("metric_type") == "cvssV3_1")
+                .then(30)
+                .when(pl.col("metric_type") == "cvssV3_0")
+                .then(20)
+                .otherwise(10)
+                .alias("version_pref"),
+            ]
+        ).with_columns(
+            [(pl.col("source_pref") + pl.col("version_pref")).alias("preference")]
+        )
+
+        # Get best metric per CVE
+        best_metrics = (
+            scored.sort(["cve_id", "preference"], descending=[False, True])
+            .group_by("cve_id")
+            .first()
+        )
+
+        # Build filter conditions
+        score_filter = pl.lit(True)
+        if min_score is not None:
+            score_filter = score_filter & (pl.col("base_score") >= min_score)
+        if max_score is not None:
+            score_filter = score_filter & (pl.col("base_score") <= max_score)
+
+        matching = best_metrics.filter(score_filter)
+        cve_ids = matching.get_column("cve_id").unique().to_list()
+
+        filtered_cves = result.cves.filter(pl.col("cve_id").is_in(cve_ids))
+        related = self._get_related_data(cve_ids)
+
+        return SearchResult(filtered_cves, **related)
+
+    def filter_by_cwe(self, result: SearchResult, cwe_id: str) -> SearchResult:
+        """Filter an existing SearchResult by CWE ID.
+
+        Args:
+            result: SearchResult to filter.
+            cwe_id: CWE ID (e.g., "787", "CWE-787").
+
+        Returns:
+            New SearchResult with CVEs matching the CWE.
+        """
+        if result.cwes is None or len(result.cwes) == 0:
+            return SearchResult(pl.DataFrame(schema=result.cves.schema))
+
+        # Normalize CWE ID
+        cwe_normalized = cwe_id.upper()
+        if not cwe_normalized.startswith("CWE-"):
+            cwe_normalized = f"CWE-{cwe_normalized}"
+
+        cve_ids_in_result = set(result.cves.get_column("cve_id").to_list())
+        cwes_in_result = result.cwes.filter(pl.col("cve_id").is_in(cve_ids_in_result))
+
+        matching = cwes_in_result.filter(
+            pl.col("cwe_id").str.to_uppercase() == cwe_normalized
+        )
+        cve_ids = matching.get_column("cve_id").unique().to_list()
+
+        filtered_cves = result.cves.filter(pl.col("cve_id").is_in(cve_ids))
+        related = self._get_related_data(cve_ids)
+
+        return SearchResult(filtered_cves, **related)
+
+    def sort_results(
+        self, result: SearchResult, field: str, order: str = "descending"
+    ) -> SearchResult:
+        """Sort search results by the specified field.
+
+        Args:
+            result: SearchResult to sort.
+            field: Field to sort by. Valid values: date, severity, cvss
+            order: Sort order. Valid values: ascending, descending (default: descending)
+
+        Returns:
+            New SearchResult with sorted CVEs.
+
+        Raises:
+            ValueError: If field or order is invalid.
+        """
+        if result.count == 0:
+            return result
+
+        # Validate and parse
+        field = field.lower()
+        order = order.lower()
+
+        if order not in ["ascending", "descending"]:
+            raise ValueError(
+                f"Invalid sort order: {order}. Must be 'ascending' or 'descending'"
+            )
+
+        descending = order == "descending"
+
+        valid_fields = ["date", "severity", "cvss"]
+        if field not in valid_fields:
+            raise ValueError(
+                f"Invalid sort field: {field}. Must be one of: {', '.join(valid_fields)}"
+            )
+
+        if field == "date":
+            sorted_cves = result.cves.sort("date_published", descending=descending)
+        elif field in ("severity", "cvss"):
+            # Need to join with metrics to sort by CVSS score
+            if result.metrics is None or len(result.metrics) == 0:
+                # No metrics available, return as-is
+                return result
+
+            cve_ids_in_result = set(result.cves.get_column("cve_id").to_list())
+
+            cvss_metrics = result.metrics.filter(
+                pl.col("cve_id").is_in(cve_ids_in_result)
+                & pl.col("metric_type").str.starts_with("cvss")
+                & pl.col("base_score").is_not_null()
+            )
+
+            if len(cvss_metrics) == 0:
+                return result
+
+            # Get best metric per CVE
+            scored = cvss_metrics.with_columns(
+                [
+                    pl.when(pl.col("source") == "cna")
+                    .then(100)
+                    .otherwise(0)
+                    .alias("source_pref"),
+                    pl.when(pl.col("metric_type") == "cvssV4_0")
+                    .then(40)
+                    .when(pl.col("metric_type") == "cvssV3_1")
+                    .then(30)
+                    .when(pl.col("metric_type") == "cvssV3_0")
+                    .then(20)
+                    .otherwise(10)
+                    .alias("version_pref"),
+                ]
+            ).with_columns(
+                [(pl.col("source_pref") + pl.col("version_pref")).alias("preference")]
+            )
+
+            best_metrics = (
+                scored.sort(["cve_id", "preference"], descending=[False, True])
+                .group_by("cve_id")
+                .first()
+                .select(["cve_id", "base_score"])
+            )
+
+            # Join and sort
+            sorted_cves = (
+                result.cves.join(best_metrics, on="cve_id", how="left")
+                .sort("base_score", descending=descending, nulls_last=True)
+                .drop("base_score")
+            )
+        else:
+            sorted_cves = result.cves
+
+        cve_ids = sorted_cves.get_column("cve_id").to_list()
+        related = self._get_related_data(cve_ids)
+
+        return SearchResult(sorted_cves, **related)
 
     def search(
         self,

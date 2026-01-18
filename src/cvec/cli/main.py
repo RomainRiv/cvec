@@ -608,7 +608,7 @@ def db_status(
 def search(
     query: Optional[str] = typer.Argument(
         None,
-        help="Search query (product name, vendor, CWE ID, CPE string, or natural language for semantic search). Optional when using --product, --vendor, or --cpe filters.",
+        help="Search query (product name, vendor, CPE string, or natural language for semantic search). Optional when using --product, --vendor, --cpe, or --cwe filters.",
     ),
     cpe: Optional[str] = typer.Option(
         None,
@@ -619,8 +619,13 @@ def search(
     version: Optional[str] = typer.Option(
         None,
         "--version",
-        "-e",
-        help="Filter by version (only show CVEs affecting this version)",
+        help="Filter by affected version (only show CVEs affecting this version)",
+    ),
+    cwe: Optional[str] = typer.Option(
+        None,
+        "--cwe",
+        "-w",
+        help="Filter by CWE ID (e.g., 787 or CWE-787)",
     ),
     mode: Optional[str] = typer.Option(
         None,
@@ -644,7 +649,17 @@ def search(
         None,
         "--severity",
         "-s",
-        help="Filter by severity (low, medium, high, critical)",
+        help="Filter by severity bucket (low, medium, high, critical)",
+    ),
+    cvss_min: Optional[float] = typer.Option(
+        None,
+        "--cvss-min",
+        help="Minimum CVSS score (0.0-10.0)",
+    ),
+    cvss_max: Optional[float] = typer.Option(
+        None,
+        "--cvss-max",
+        help="Maximum CVSS score (0.0-10.0)",
     ),
     state: Optional[str] = typer.Option(
         None,
@@ -664,6 +679,16 @@ def search(
         "-k",
         help="Only show CVEs in CISA Known Exploited Vulnerabilities",
     ),
+    sort: Optional[str] = typer.Option(
+        None,
+        "--sort",
+        help="Sort results by: date, severity, cvss",
+    ),
+    order: str = typer.Option(
+        "descending",
+        "--order",
+        help="Sort order: ascending or descending (default: descending)",
+    ),
     min_similarity: float = typer.Option(
         0.3,
         "--min-similarity",
@@ -678,14 +703,15 @@ def search(
     detailed: bool = typer.Option(
         False, "--detailed", "-d", help="Show detailed output with descriptions"
     ),
-    verbose: bool = typer.Option(
-        False, "--verbose", "-v", help="Show summary statistics"
+    stats: bool = typer.Option(False, "--stats", help="Show summary statistics"),
+    ids_only: bool = typer.Option(
+        False, "--ids-only", help="Output only CVE IDs, one per line (for scripting)"
     ),
     output: Optional[str] = typer.Option(
         None, "--output", "-o", help="Write output to file (no truncation when used)"
     ),
 ) -> None:
-    """Search CVEs by product name, vendor, CWE ID, CPE, or natural language.
+    """Search CVEs by product name, vendor, CWE, CPE, or natural language.
 
     Search Modes:
     - fuzzy (default): Case-insensitive substring matching
@@ -699,16 +725,19 @@ def search(
     your specific version.
 
     Examples:
-        cvec search "linux kernel"              # Fuzzy search (default)
-        cvec search "linux" --mode strict       # Exact match only
-        cvec search "linux.*kernel" --mode regex # Regex pattern
-        cvec search "memory corruption" -m      # Semantic search
-        cvec search "windows" -V microsoft      # Filter by vendor
-        cvec search "chrome" -p browser         # Filter by product
-        cvec search "apache" -d                 # Show with descriptions
-        cvec search --cpe "cpe:2.3:a:apache:http_server:*:*:*:*:*:*:*:*"  # CPE search
-        cvec search --cpe "cpe:2.3:a:apache:http_server:*:*:*:*:*:*:*:*" --version 2.4.51  # Version filter
-        cvec search "apache" --version 2.4.51   # Filter by version
+        cvec search "linux kernel"                    # Fuzzy search (default)
+        cvec search "linux" --mode strict             # Exact match only
+        cvec search "linux.*kernel" --mode regex     # Regex pattern
+        cvec search "memory corruption" -m            # Semantic search
+        cvec search "windows" -V microsoft            # Filter by vendor
+        cvec search "chrome" -p browser               # Filter by product
+        cvec search --cwe 787                         # Search by CWE ID
+        cvec search "apache" --cvss-min 7.0           # CVSS >= 7.0
+        cvec search "linux" --sort date               # Sort by date (descending by default)
+        cvec search "linux" --sort cvss --order ascending  # Sort by CVSS ascending
+        cvec search "apache" --ids-only               # Output CVE IDs only
+        cvec search --cpe "cpe:2.3:a:apache:http_server:*:*:*:*:*:*:*:*"
+        cvec search "apache" --version 2.4.51         # Filter by affected version
     """
     config = Config()
     service = CVESearchService(config)
@@ -720,6 +749,9 @@ def search(
         except ValueError as e:
             console.print(f"[red]Error: {e}[/red]")
             raise typer.Exit(1)
+    # CWE filter without query
+    elif cwe and not query:
+        result = service.by_cwe(cwe)
     # Product/vendor filter without query
     elif (product or vendor) and not query:
         # Search by product/vendor filter only
@@ -740,7 +772,7 @@ def search(
         # Validate non-empty query when not using filters
         if not query or not query.strip():
             console.print(
-                "[red]Error: Search query, --product, --vendor, or --cpe option required.[/red]"
+                "[red]Error: Search query, --product, --vendor, --cpe, or --cwe option required.[/red]"
             )
             raise typer.Exit(1)
 
@@ -854,7 +886,7 @@ def search(
             console.print(f"[red]Error: {e}[/red]")
             raise typer.Exit(1)
 
-    # Apply severity filter
+    # Apply severity bucket filter
     if severity:
         sev_lower = severity.lower()
         if sev_lower not in SEVERITY_THRESHOLDS:
@@ -867,10 +899,49 @@ def search(
         sev: SeverityLevel = sev_lower  # type: ignore[assignment]
         result = service.filter_by_severity(result, sev)
 
+    # Apply CVSS score filters
+    if cvss_min is not None or cvss_max is not None:
+        result = service.filter_by_cvss_score(
+            result, min_score=cvss_min, max_score=cvss_max
+        )
+
+    # Apply CWE filter (if query was provided alongside --cwe)
+    if cwe and query:
+        result = service.filter_by_cwe(result, cwe)
+
+    # Apply sorting
+    if sort:
+        # Validate order
+        order_lower = order.lower()
+        if order_lower not in ["ascending", "descending"]:
+            console.print(
+                f"[red]Error: Invalid order '{order}'. Must be 'ascending' or 'descending'[/red]"
+            )
+            raise typer.Exit(1)
+
+        try:
+            result = service.sort_results(result, sort, order_lower)
+        except ValueError as e:
+            console.print(f"[red]Error: {e}[/red]")
+            raise typer.Exit(1)
+
+    # Output CVE IDs only (for scripting)
+    if ids_only:
+        cve_ids = result.cves.get_column("cve_id").to_list()
+        if output:
+            with open(output, "w") as f:
+                for cve_id in cve_ids[:limit]:
+                    f.write(f"{cve_id}\n")
+            console.print(f"[green]Output written to {output}[/green]")
+        else:
+            for cve_id in cve_ids[:limit]:
+                print(cve_id)
+        return
+
     output_search_results(
         result,
         format=format,
-        verbose=verbose,
+        verbose=stats,
         limit=limit,
         search_service=service,
         output_file=output,
@@ -880,42 +951,104 @@ def search(
 
 @app.command()
 def get(
-    cve_id: str = typer.Argument(..., help="CVE ID (e.g., CVE-2024-1234)"),
+    cve_ids: list[str] = typer.Argument(
+        ..., help="CVE ID(s) (e.g., CVE-2024-1234 CVE-2024-5678)"
+    ),
     format: str = typer.Option(
         "table", "--format", "-f", help="Output format: table, json, markdown"
     ),
-    verbose: bool = typer.Option(
-        False, "--verbose", "-v", help="Show all available details"
+    detailed: bool = typer.Option(
+        False,
+        "--detailed",
+        "-d",
+        help="Show all available details (descriptions, references, etc.)",
     ),
     output: Optional[str] = typer.Option(
         None, "--output", "-o", help="Write output to file"
     ),
 ) -> None:
-    """Get details for a specific CVE."""
+    """Get details for one or more CVEs.
+
+    Examples:
+        cvec get CVE-2024-1234
+        cvec get CVE-2024-1234 CVE-2024-5678
+        cvec get CVE-2024-1234 --detailed
+        cvec get CVE-2024-1234 --format json --output cve.json
+    """
     config = Config()
     service = CVESearchService(config)
 
-    result = service.by_id(cve_id)
+    all_results = []
+    not_found = []
 
-    if len(result.cves) == 0:
-        console.print(f"[red]CVE not found: {cve_id}[/red]")
+    for cve_id in cve_ids:
+        result = service.by_id(cve_id)
+        if len(result.cves) == 0:
+            not_found.append(cve_id)
+        else:
+            all_results.append((cve_id, result))
+
+    if not_found:
+        for cve_id in not_found:
+            console.print(f"[yellow]CVE not found: {cve_id}[/yellow]")
+
+    if not all_results:
         raise typer.Exit(1)
 
-    row = result.cves.to_dicts()[0]
-    output_cve_detail(
-        row,
-        result,
-        service,
-        format=format,
-        verbose=verbose,
-        output_file=output,
-    )
+    # For single CVE, use the detailed output
+    if len(all_results) == 1:
+        cve_id, result = all_results[0]
+        row = result.cves.to_dicts()[0]
+        output_cve_detail(
+            row,
+            result,
+            service,
+            format=format,
+            verbose=detailed,
+            output_file=output,
+        )
+    else:
+        # For multiple CVEs, merge results and use search output format
+        import polars as pl
+
+        merged_cves = pl.concat([r.cves for _, r in all_results])
+        merged_result = SearchResult(cves=merged_cves)
+
+        # Enrich with related data
+        for _, r in all_results:
+            if r.descriptions is not None:
+                if merged_result.descriptions is None:
+                    merged_result.descriptions = r.descriptions
+                else:
+                    merged_result.descriptions = pl.concat(
+                        [merged_result.descriptions, r.descriptions]
+                    )
+            if r.metrics is not None:
+                if merged_result.metrics is None:
+                    merged_result.metrics = r.metrics
+                else:
+                    merged_result.metrics = pl.concat(
+                        [merged_result.metrics, r.metrics]
+                    )
+
+        output_search_results(
+            merged_result,
+            format=format,
+            verbose=False,
+            limit=len(cve_ids),
+            search_service=service,
+            output_file=output,
+            detailed=detailed,
+        )
 
 
 @app.command()
 def stats(
     format: str = typer.Option(
         "table", "--format", "-f", help="Output format: table, json, markdown"
+    ),
+    output: Optional[str] = typer.Option(
+        None, "--output", "-o", help="Write output to file"
     ),
 ) -> None:
     """Show database statistics."""
@@ -928,26 +1061,43 @@ def stats(
         console.print("[red]No data found. Run 'cvec db update' first.[/red]")
         raise typer.Exit(1)
 
+    # Generate output content
+    output_content = None
+
     if format == OutputFormat.JSON:
-        print(json.dumps(statistics, indent=2))
+        output_content = json.dumps(statistics, indent=2)
 
     elif format == OutputFormat.MARKDOWN:
-        print("# CVE Database Statistics\n")
-        print(f"**Total CVEs:** {statistics['total_cves']}\n")
-        print(f"**CVEs with CVSS:** {statistics['cves_with_cvss']}\n")
-        print(f"**Unique Products:** {statistics['unique_products']}\n")
-        print(f"**Unique Vendors:** {statistics['unique_vendors']}\n")
-        print(f"**Unique CWEs:** {statistics['unique_cwes']}\n")
-        print(f"**Total References:** {statistics['total_references']}\n")
-
-        print("\n## CVEs by State\n")
-        for state, count in statistics.get("states", {}).items():
-            print(f"- {state}: {count}")
-
-        print("\n## CVEs by Year\n")
+        lines = [
+            "# CVE Database Statistics\n",
+            f"**Total CVEs:** {statistics['total_cves']}\n",
+            f"**CVEs with CVSS:** {statistics['cves_with_cvss']}\n",
+            f"**Unique Products:** {statistics['unique_products']}\n",
+            f"**Unique Vendors:** {statistics['unique_vendors']}\n",
+            f"**Unique CWEs:** {statistics['unique_cwes']}\n",
+            f"**Total References:** {statistics['total_references']}\n",
+            "\n## CVEs by State\n",
+        ]
+        for state_name, count in statistics.get("states", {}).items():
+            lines.append(f"- {state_name}: {count}")
+        lines.append("\n## CVEs by Year\n")
         for year, count in statistics.get("by_year", {}).items():
-            print(f"- {year}: {count}")
+            lines.append(f"- {year}: {count}")
+        output_content = "\n".join(lines)
 
+    # Handle file output
+    if output:
+        if output_content is None:
+            # Generate text content for table format when writing to file
+            output_content = json.dumps(statistics, indent=2)
+        with open(output, "w") as f:
+            f.write(output_content)
+        console.print(f"[green]Output written to {output}[/green]")
+        return
+
+    # Print to console
+    if output_content:
+        print(output_content)
     else:
         console.print(
             Panel(
@@ -966,8 +1116,8 @@ def stats(
             table = Table(title="CVEs by State")
             table.add_column("State")
             table.add_column("Count", justify="right")
-            for state, count in statistics.get("states", {}).items():
-                table.add_row(state, str(count))
+            for state_name, count in statistics.get("states", {}).items():
+                table.add_row(state_name, str(count))
             console.print(table)
 
         if statistics.get("by_year"):
@@ -977,47 +1127,6 @@ def stats(
             years = sorted(statistics.get("by_year", {}).items(), reverse=True)[:10]
             for year, count in years:
                 table.add_row(year, str(count))
-            console.print(table)
-
-
-@app.command()
-def recent(
-    days: int = typer.Option(30, "--days", "-D", help="Number of days to look back"),
-    limit: int = typer.Option(
-        50, "--limit", "-n", help="Maximum number of results to show"
-    ),
-    format: str = typer.Option(
-        "table", "--format", "-f", help="Output format: table, json, markdown"
-    ),
-    detailed: bool = typer.Option(
-        False, "--detailed", "-d", help="Show detailed output with descriptions"
-    ),
-    verbose: bool = typer.Option(
-        False, "--verbose", "-v", help="Show summary statistics"
-    ),
-    output: Optional[str] = typer.Option(
-        None, "--output", "-o", help="Write output to file (no truncation when used)"
-    ),
-) -> None:
-    """Show recently published CVEs."""
-    config = Config()
-    service = CVESearchService(config)
-
-    result = service.recent(days=days)
-
-    if len(result.cves) == 0:
-        console.print(f"[yellow]No CVEs found in the last {days} days.[/yellow]")
-        return
-
-    output_search_results(
-        result,
-        format=format,
-        verbose=verbose,
-        limit=limit,
-        search_service=service,
-        output_file=output,
-        detailed=detailed,
-    )
 
 
 @app.command()

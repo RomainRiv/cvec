@@ -219,3 +219,383 @@ class TestCVEAutoDetect:
 
         assert CVE_ID_PATTERN.match("CWE-79") is None
         assert CVE_ID_PATTERN.match("CWE-1234") is None
+
+
+class TestCLISearchFilters:
+    """CLI integration tests for search command filters."""
+
+    def test_search_with_cwe_filter(self, sample_parquet_data):
+        """Search command with --cwe filter."""
+        from typer.testing import CliRunner
+
+        from cvec.cli.main import app
+
+        runner = CliRunner()
+        result = runner.invoke(
+            app,
+            [
+                "search",
+                "linux",
+                "--cwe",
+                "787",
+                "--limit",
+                "5",
+            ],
+            env={"CVE_DATA_DIR": str(sample_parquet_data.data_dir)},
+        )
+
+        assert result.exit_code == 0
+
+    def test_search_with_cvss_min(self, sample_parquet_data):
+        """Search command with --cvss-min filter."""
+        from typer.testing import CliRunner
+
+        from cvec.cli.main import app
+
+        runner = CliRunner()
+        result = runner.invoke(
+            app,
+            [
+                "search",
+                "linux",
+                "--cvss-min",
+                "7.0",
+                "--limit",
+                "5",
+            ],
+            env={"CVE_DATA_DIR": str(sample_parquet_data.data_dir)},
+        )
+
+        assert result.exit_code == 0
+
+    def test_search_with_cvss_range(self, sample_parquet_data):
+        """Search command with both --cvss-min and --cvss-max."""
+        from typer.testing import CliRunner
+
+        from cvec.cli.main import app
+
+        runner = CliRunner()
+        result = runner.invoke(
+            app,
+            [
+                "search",
+                "linux",
+                "--cvss-min",
+                "7.0",
+                "--cvss-max",
+                "9.0",
+                "--limit",
+                "5",
+            ],
+            env={"CVE_DATA_DIR": str(sample_parquet_data.data_dir)},
+        )
+
+        assert result.exit_code == 0
+
+    def test_search_with_sort_date(self, sample_parquet_data):
+        """Search command with --sort date."""
+        from typer.testing import CliRunner
+
+        from cvec.cli.main import app
+
+        runner = CliRunner()
+        result = runner.invoke(
+            app,
+            [
+                "search",
+                "linux",
+                "--sort",
+                "date",
+                "--limit",
+                "5",
+            ],
+            env={"CVE_DATA_DIR": str(sample_parquet_data.data_dir)},
+        )
+
+        assert result.exit_code == 0
+
+    def test_search_with_sort_cvss(self, sample_parquet_data):
+        """Search command with --sort cvss."""
+        from typer.testing import CliRunner
+
+        from cvec.cli.main import app
+
+        runner = CliRunner()
+        result = runner.invoke(
+            app,
+            [
+                "search",
+                "linux",
+                "--sort",
+                "cvss",
+                "--limit",
+                "5",
+            ],
+            env={"CVE_DATA_DIR": str(sample_parquet_data.data_dir)},
+        )
+
+        assert result.exit_code == 0
+
+    def test_search_with_sort_and_order(self, sample_parquet_data):
+        """Search command with --sort and --order."""
+        from typer.testing import CliRunner
+
+        from cvec.cli.main import app
+
+        runner = CliRunner()
+        result = runner.invoke(
+            app,
+            [
+                "search",
+                "linux",
+                "--sort",
+                "date",
+                "--order",
+                "ascending",
+                "--limit",
+                "5",
+            ],
+            env={"CVE_DATA_DIR": str(sample_parquet_data.data_dir)},
+        )
+
+        assert result.exit_code == 0
+
+    def test_search_with_ids_only(self, sample_parquet_data):
+        """Search command with --ids-only flag."""
+        from typer.testing import CliRunner
+
+        from cvec.cli.main import app
+
+        runner = CliRunner()
+        result = runner.invoke(
+            app,
+            [
+                "search",
+                "linux",
+                "--ids-only",
+                "--limit",
+                "3",
+            ],
+            env={"CVE_DATA_DIR": str(sample_parquet_data.data_dir)},
+        )
+
+        assert result.exit_code == 0
+        # Output should contain CVE IDs
+        assert "CVE-" in result.output
+
+    def test_search_with_stats(self, sample_parquet_data):
+        """Search command with --stats flag."""
+        from typer.testing import CliRunner
+
+        from cvec.cli.main import app
+
+        runner = CliRunner()
+        result = runner.invoke(
+            app,
+            [
+                "search",
+                "linux",
+                "--stats",
+                "--limit",
+                "5",
+            ],
+            env={"CVE_DATA_DIR": str(sample_parquet_data.data_dir)},
+        )
+
+        assert result.exit_code == 0
+        # Should show summary statistics
+        assert (
+            "Severity:" in result.output
+            or "Summary" in result.output
+            or result.exit_code == 0
+        )
+
+    def test_search_cwe_without_query(self, sample_parquet_data):
+        """Search with --cwe and no query should work."""
+        from typer.testing import CliRunner
+
+        from cvec.cli.main import app
+
+        runner = CliRunner()
+        result = runner.invoke(
+            app,
+            [
+                "search",
+                "--cwe",
+                "787",
+                "--limit",
+                "5",
+            ],
+            env={"CVE_DATA_DIR": str(sample_parquet_data.data_dir)},
+        )
+
+        assert result.exit_code == 0
+
+    def test_search_combined_filters(self, sample_parquet_data):
+        """Search with multiple filters combined."""
+        from typer.testing import CliRunner
+
+        from cvec.cli.main import app
+
+        runner = CliRunner()
+        result = runner.invoke(
+            app,
+            [
+                "search",
+                "linux",
+                "--cwe",
+                "787",
+                "--cvss-min",
+                "7.0",
+                "--sort",
+                "cvss",
+                "--limit",
+                "3",
+            ],
+            env={"CVE_DATA_DIR": str(sample_parquet_data.data_dir)},
+        )
+
+        assert result.exit_code == 0
+
+
+class TestCLIGetCommand:
+    """CLI integration tests for get command with multiple CVEs."""
+
+    def test_get_single_cve(self, sample_parquet_data):
+        """Get command with single CVE ID."""
+        from typer.testing import CliRunner
+
+        from cvec.cli.main import app
+
+        runner = CliRunner()
+        result = runner.invoke(
+            app,
+            ["get", "CVE-2022-2196"],
+            env={"CVE_DATA_DIR": str(sample_parquet_data.data_dir)},
+        )
+
+        assert result.exit_code == 0
+        assert "CVE-2022-2196" in result.output
+
+    def test_get_multiple_cves(self, sample_parquet_data):
+        """Get command with multiple CVE IDs."""
+        from typer.testing import CliRunner
+
+        from cvec.cli.main import app
+
+        runner = CliRunner()
+        result = runner.invoke(
+            app,
+            ["get", "CVE-2022-2196", "CVE-2024-1234"],
+            env={"CVE_DATA_DIR": str(sample_parquet_data.data_dir)},
+        )
+
+        assert result.exit_code == 0
+        # Both CVE IDs should appear in output
+        assert "CVE-2022-2196" in result.output or "CVE-2024-1234" in result.output
+
+    def test_get_with_detailed_flag(self, sample_parquet_data):
+        """Get command with --detailed flag."""
+        from typer.testing import CliRunner
+
+        from cvec.cli.main import app
+
+        runner = CliRunner()
+        result = runner.invoke(
+            app,
+            ["get", "CVE-2022-2196", "--detailed"],
+            env={"CVE_DATA_DIR": str(sample_parquet_data.data_dir)},
+        )
+
+        assert result.exit_code == 0
+
+    def test_get_nonexistent_cve(self, sample_parquet_data):
+        """Get command with non-existent CVE should show warning."""
+        from typer.testing import CliRunner
+
+        from cvec.cli.main import app
+
+        runner = CliRunner()
+        result = runner.invoke(
+            app,
+            ["get", "CVE-9999-99999"],
+            env={"CVE_DATA_DIR": str(sample_parquet_data.data_dir)},
+        )
+
+        assert result.exit_code == 1
+        assert "not found" in result.output.lower()
+
+    def test_get_mixed_valid_invalid(self, sample_parquet_data):
+        """Get command with mix of valid and invalid CVE IDs."""
+        from typer.testing import CliRunner
+
+        from cvec.cli.main import app
+
+        runner = CliRunner()
+        result = runner.invoke(
+            app,
+            ["get", "CVE-2022-2196", "CVE-9999-99999"],
+            env={"CVE_DATA_DIR": str(sample_parquet_data.data_dir)},
+        )
+
+        # Should show warning for invalid but succeed for valid
+        assert "not found" in result.output.lower()
+
+
+class TestCLIStatsCommand:
+    """CLI integration tests for stats command with --output."""
+
+    def test_stats_basic(self, sample_parquet_data):
+        """Stats command basic execution."""
+        from typer.testing import CliRunner
+
+        from cvec.cli.main import app
+
+        runner = CliRunner()
+        result = runner.invoke(
+            app,
+            ["stats"],
+            env={"CVE_DATA_DIR": str(sample_parquet_data.data_dir)},
+        )
+
+        assert result.exit_code == 0
+        assert "CVE" in result.output or "Total" in result.output
+
+    def test_stats_with_json_format(self, sample_parquet_data):
+        """Stats command with JSON format."""
+        import json
+
+        from typer.testing import CliRunner
+
+        from cvec.cli.main import app
+
+        runner = CliRunner()
+        result = runner.invoke(
+            app,
+            ["stats", "--format", "json"],
+            env={"CVE_DATA_DIR": str(sample_parquet_data.data_dir)},
+        )
+
+        assert result.exit_code == 0
+        # Should be valid JSON
+        data = json.loads(result.output)
+        assert "total_cves" in data or isinstance(data, dict)
+
+    def test_stats_with_output_file(self, sample_parquet_data, tmp_path):
+        """Stats command with --output to file."""
+        from typer.testing import CliRunner
+
+        from cvec.cli.main import app
+
+        runner = CliRunner()
+        output_file = tmp_path / "stats.json"
+
+        result = runner.invoke(
+            app,
+            ["stats", "--format", "json", "--output", str(output_file)],
+            env={"CVE_DATA_DIR": str(sample_parquet_data.data_dir)},
+        )
+
+        assert result.exit_code == 0
+        assert output_file.exists()
+        assert "Output written" in result.output

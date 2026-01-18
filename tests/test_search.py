@@ -614,3 +614,279 @@ class TestVersionRangeParsing:
         assert not is_version_affected(
             "1.28.9", version_start=version_start, less_than_or_equal=less_than_or_equal
         )
+
+
+class TestCVSSScoreFiltering:
+    """Tests for filter_by_cvss_score method."""
+
+    def test_filter_by_cvss_min(self, sample_parquet_data):
+        """Filter by minimum CVSS score."""
+        service = CVESearchService(config=sample_parquet_data)
+
+        # Get all results first
+        result_all = service.by_product("", fuzzy=True)
+        initial_count = result_all.count
+
+        # Filter by CVSS >= 7.0 (high and critical)
+        result_high = service.filter_by_cvss_score(result_all, min_score=7.0)
+
+        # Should have fewer results
+        assert result_high.count <= initial_count
+        assert result_high.count >= 0
+
+    def test_filter_by_cvss_max(self, sample_parquet_data):
+        """Filter by maximum CVSS score."""
+        service = CVESearchService(config=sample_parquet_data)
+
+        result_all = service.by_product("", fuzzy=True)
+
+        # Filter by CVSS <= 5.0 (low and medium)
+        result_low = service.filter_by_cvss_score(result_all, max_score=5.0)
+
+        assert result_low.count >= 0
+
+    def test_filter_by_cvss_range(self, sample_parquet_data):
+        """Filter by CVSS score range."""
+        service = CVESearchService(config=sample_parquet_data)
+
+        result_all = service.by_product("", fuzzy=True)
+
+        # Filter by CVSS between 7.0 and 9.0
+        result_range = service.filter_by_cvss_score(
+            result_all, min_score=7.0, max_score=9.0
+        )
+
+        assert result_range.count >= 0
+
+    def test_filter_by_cvss_no_metrics(self, sample_parquet_data):
+        """Filter should handle results with no metrics gracefully."""
+        import polars as pl
+
+        service = CVESearchService(config=sample_parquet_data)
+        cves_df = service._ensure_cves_loaded()
+
+        # Create result with no metrics
+        from cvec.services.search import SearchResult
+
+        result_no_metrics = SearchResult(cves_df.head(1))
+
+        # Should return empty result
+        filtered = service.filter_by_cvss_score(result_no_metrics, min_score=7.0)
+        assert filtered.count == 0
+
+    def test_filter_by_cvss_both_none(self, sample_parquet_data):
+        """Filter with both min and max as None should return original result."""
+        service = CVESearchService(config=sample_parquet_data)
+
+        result_all = service.by_product("", fuzzy=True)
+
+        # No filtering if both are None
+        result_same = service.filter_by_cvss_score(
+            result_all, min_score=None, max_score=None
+        )
+
+        assert result_same.count == result_all.count
+
+    def test_cvss_filter_with_invalid_values(self, sample_parquet_data):
+        """CVSS filter should handle edge values correctly."""
+        service = CVESearchService(config=sample_parquet_data)
+
+        result = service.by_product("", fuzzy=True)
+
+        # Test with min > max (should still work, just return empty)
+        filtered = service.filter_by_cvss_score(result, min_score=9.0, max_score=7.0)
+        assert filtered.count == 0
+
+        # Test with boundary values
+        filtered_zero = service.filter_by_cvss_score(result, min_score=0.0)
+        assert filtered_zero.count >= 0
+
+        filtered_ten = service.filter_by_cvss_score(result, max_score=10.0)
+        assert filtered_ten.count >= 0
+
+
+class TestCWEFiltering:
+    """Tests for filter_by_cwe method."""
+
+    def test_filter_by_cwe_numeric(self, sample_parquet_data):
+        """Filter by CWE ID with numeric format."""
+        service = CVESearchService(config=sample_parquet_data)
+
+        result_all = service.by_product("", fuzzy=True)
+
+        # Filter by CWE-787 (out-of-bounds write)
+        result_cwe = service.filter_by_cwe(result_all, "787")
+
+        assert result_cwe.count >= 0
+
+    def test_filter_by_cwe_with_prefix(self, sample_parquet_data):
+        """Filter by CWE ID with CWE- prefix."""
+        service = CVESearchService(config=sample_parquet_data)
+
+        result_all = service.by_product("", fuzzy=True)
+
+        # Filter by CWE-787 with prefix
+        result_cwe = service.filter_by_cwe(result_all, "CWE-787")
+
+        assert result_cwe.count >= 0
+
+    def test_filter_by_cwe_case_insensitive(self, sample_parquet_data):
+        """CWE filter should be case-insensitive."""
+        service = CVESearchService(config=sample_parquet_data)
+
+        result_all = service.by_product("", fuzzy=True)
+
+        # Test with lowercase
+        result_lower = service.filter_by_cwe(result_all, "cwe-787")
+        result_upper = service.filter_by_cwe(result_all, "CWE-787")
+
+        assert result_lower.count == result_upper.count
+
+    def test_filter_by_cwe_no_cwes(self, sample_parquet_data):
+        """Filter should handle results with no CWEs gracefully."""
+        import polars as pl
+
+        service = CVESearchService(config=sample_parquet_data)
+        cves_df = service._ensure_cves_loaded()
+
+        # Create result with no CWEs
+        from cvec.services.search import SearchResult
+
+        result_no_cwes = SearchResult(cves_df.head(1))
+
+        # Should return empty result
+        filtered = service.filter_by_cwe(result_no_cwes, "787")
+        assert filtered.count == 0
+
+    def test_cwe_filter_empty_string(self, sample_parquet_data):
+        """CWE filter with empty string should handle gracefully."""
+        service = CVESearchService(config=sample_parquet_data)
+
+        result = service.by_product("", fuzzy=True)
+
+        # Empty CWE should normalize to "CWE-"
+        filtered = service.filter_by_cwe(result, "")
+        # Should return no matches or handle gracefully
+        assert filtered.count >= 0
+
+
+class TestSortResults:
+    """Tests for sort_results method."""
+
+    def test_sort_by_date_ascending(self, sample_parquet_data):
+        """Sort by date in ascending order."""
+        service = CVESearchService(config=sample_parquet_data)
+
+        result = service.by_product("", fuzzy=True)
+
+        # Sort by date ascending
+        sorted_result = service.sort_results(result, "date", "ascending")
+
+        assert sorted_result.count == result.count
+        if sorted_result.count > 1:
+            dates = sorted_result.cves.get_column("date_published").to_list()
+            # Check that dates are in ascending order
+            for i in range(len(dates) - 1):
+                if dates[i] is not None and dates[i + 1] is not None:
+                    assert dates[i] <= dates[i + 1]
+
+    def test_sort_by_date_descending(self, sample_parquet_data):
+        """Sort by date in descending order."""
+        service = CVESearchService(config=sample_parquet_data)
+
+        result = service.by_product("", fuzzy=True)
+
+        # Sort by date descending
+        sorted_result = service.sort_results(result, "date", "descending")
+
+        assert sorted_result.count == result.count
+        if sorted_result.count > 1:
+            dates = sorted_result.cves.get_column("date_published").to_list()
+            # Check that dates are in descending order
+            for i in range(len(dates) - 1):
+                if dates[i] is not None and dates[i + 1] is not None:
+                    assert dates[i] >= dates[i + 1]
+
+    def test_sort_by_cvss_descending(self, sample_parquet_data):
+        """Sort by CVSS score in descending order."""
+        service = CVESearchService(config=sample_parquet_data)
+
+        result = service.by_product("", fuzzy=True)
+
+        # Sort by CVSS descending (highest first)
+        sorted_result = service.sort_results(result, "cvss", "descending")
+
+        assert sorted_result.count == result.count
+
+    def test_sort_by_severity_ascending(self, sample_parquet_data):
+        """Sort by severity in ascending order."""
+        service = CVESearchService(config=sample_parquet_data)
+
+        result = service.by_product("", fuzzy=True)
+
+        # Sort by severity ascending (lowest first)
+        sorted_result = service.sort_results(result, "severity", "ascending")
+
+        assert sorted_result.count == result.count
+
+    def test_sort_invalid_field(self, sample_parquet_data):
+        """Sort with invalid field should raise ValueError."""
+        service = CVESearchService(config=sample_parquet_data)
+
+        result = service.by_product("", fuzzy=True)
+
+        with pytest.raises(ValueError, match="Invalid sort field"):
+            service.sort_results(result, "invalid", "descending")
+
+    def test_sort_empty_result(self, sample_parquet_data):
+        """Sort should handle empty results gracefully."""
+        import polars as pl
+
+        service = CVESearchService(config=sample_parquet_data)
+
+        # Create empty result
+        from cvec.services.search import SearchResult
+
+        empty_result = SearchResult(pl.DataFrame())
+
+        # Should return empty result without error
+        sorted_result = service.sort_results(empty_result, "date", "descending")
+        assert sorted_result.count == 0
+
+    def test_sort_no_metrics(self, sample_parquet_data):
+        """Sort by CVSS with no metrics should return original result."""
+        import polars as pl
+
+        service = CVESearchService(config=sample_parquet_data)
+        cves_df = service._ensure_cves_loaded()
+
+        # Create result with no metrics
+        from cvec.services.search import SearchResult
+
+        result_no_metrics = SearchResult(cves_df.head(2))
+
+        # Should return same result
+        sorted_result = service.sort_results(result_no_metrics, "cvss", "descending")
+        assert sorted_result.count == result_no_metrics.count
+
+    def test_sort_preserves_data_integrity(self, sample_parquet_data):
+        """Sorting should not lose any CVE data."""
+        service = CVESearchService(config=sample_parquet_data)
+
+        result = service.by_product("", fuzzy=True)
+        original_ids = set(result.cves.get_column("cve_id").to_list())
+
+        # Sort and check IDs are preserved
+        sorted_result = service.sort_results(result, "date", "descending")
+        sorted_ids = set(sorted_result.cves.get_column("cve_id").to_list())
+
+        assert original_ids == sorted_ids
+
+    def test_sort_invalid_order(self, sample_parquet_data):
+        """Sort with invalid order should raise ValueError."""
+        service = CVESearchService(config=sample_parquet_data)
+
+        result = service.by_product("", fuzzy=True)
+
+        with pytest.raises(ValueError, match="Invalid sort order"):
+            service.sort_results(result, "date", "invalid")

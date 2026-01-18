@@ -100,6 +100,14 @@ cvec search "CWE-79"
 cvec search "linux" --severity critical
 cvec search "linux" --severity high
 
+# Filter by CVSS score range
+cvec search "linux" --cvss-min 7.0
+cvec search "linux" --cvss-min 9.0 --cvss-max 10.0
+
+# Filter by CWE
+cvec search --cwe 787                    # CWE-787 (Out-of-bounds Write)
+cvec search "linux" --cwe 416            # Combined with query
+
 # Filter by date
 cvec search "windows" --after 2024-01-01
 cvec search "windows" --before 2024-06-01
@@ -107,10 +115,21 @@ cvec search "windows" --before 2024-06-01
 # Filter by KEV (Known Exploited Vulnerabilities)
 cvec search "windows" --kev
 
+# Sort results
+cvec search "linux" --sort date          # Sort by date (descending by default)
+cvec search "linux" --sort date --order ascending   # Sort by date, oldest first
+cvec search "linux" --sort cvss          # Sort by CVSS (highest first)
+cvec search "linux" --sort severity --order ascending  # Sort by severity, lowest first
+
 # Output formats
 cvec search "linux" --format json
 cvec search "linux" --format markdown
-cvec search "linux" --format table  # default
+cvec search "linux" --format table       # default
+
+# Scripting: output only CVE IDs (one per line)
+cvec search "linux" --ids-only
+cvec search "linux" --ids-only | xargs -I {} cvec get {}
+cvec search "linux" --ids-only | xargs -I {} cvec get {}
 
 # Save to file
 cvec search "linux" --output results.json --format json
@@ -154,12 +173,13 @@ cvec search --semantic "XSS attacks" --format json
 
 ### Get
 
-Get detailed information about a specific CVE:
+Get detailed information about one or more CVEs:
 
 ```bash
 cvec get CVE-2024-1234
+cvec get CVE-2024-1234 CVE-2024-5678   # Multiple CVEs
+cvec get CVE-2024-1234 --detailed       # Include all details
 cvec get CVE-2024-1234 --format json
-cvec get CVE-2024-1234 --verbose
 cvec get CVE-2024-1234 --output cve-details.json --format json
 ```
 
@@ -171,16 +191,7 @@ Show database statistics:
 cvec stats
 cvec stats --format json
 cvec stats --format markdown
-```
-
-### Recent
-
-Show recently published CVEs:
-
-```bash
-cvec recent
-cvec recent --days 7
-cvec recent --limit 20
+cvec stats --output stats.json --format json
 ```
 
 ## Output Formats
