@@ -329,6 +329,9 @@ def db_extract_parquet(
 
 @build_app.command("extract-embeddings")
 def db_extract_embeddings(
+    years: int = typer.Option(
+        None, "--years", "-y", help="Number of years to process (default: from config)"
+    ),
     batch_size: int = typer.Option(
         256, "--batch-size", "-b", help="Number of CVEs to process per batch"
     ),
@@ -353,7 +356,7 @@ def db_extract_embeddings(
 
     Example:
         cvec db build extract-embeddings
-        cvec db build extract-embeddings --batch-size 512 --verbose
+        cvec db build extract-embeddings --years 5 --batch-size 512 --verbose
         cvec db build extract-embeddings --data-dir /path/to/data
     """
     # Check for semantic dependency
@@ -368,6 +371,8 @@ def db_extract_embeddings(
 
     data_path = Path(data_dir) if data_dir else None
     config = Config(data_dir=data_path)
+    if years:
+        config.default_years = years
 
     # Check if parquet files exist
     if not config.cves_parquet.exists():
@@ -384,7 +389,7 @@ def db_extract_embeddings(
 
     try:
         service = EmbeddingsService(config, quiet=not verbose)
-        result = service.extract_embeddings(batch_size=batch_size)
+        result = service.extract_embeddings(batch_size=batch_size, years=years)
 
         console.print(f"[green]✓ Generated {result['count']} embeddings[/green]")
         console.print(f"  - Model: {result['model']}")
@@ -645,6 +650,11 @@ def search(
         "-c",
         help="Search by CPE string (e.g., cpe:2.3:a:apache:http_server:*:*:*:*:*:*:*:*)",
     ),
+    purl: Optional[str] = typer.Option(
+        None,
+        "--purl",
+        help="Search by Package URL (e.g., pkg:pypi/django, pkg:npm/lodash)",
+    ),
     version: Optional[str] = typer.Option(
         None,
         "--version",
@@ -744,7 +754,7 @@ def search(
         None, "--output", "-o", help="Write output to file (no truncation when used)"
     ),
 ) -> None:
-    """Search CVEs by product name, vendor, CWE, CPE, or natural language.
+    """Search CVEs by product name, vendor, CWE, CPE, PURL, or natural language.
 
     Search Modes:
     - fuzzy (default): Case-insensitive substring matching
@@ -757,6 +767,11 @@ def search(
     for specific software. Use --version to filter to only CVEs that affect
     your specific version.
 
+    PURL Search:
+    Search by Package URL (PURL) to find vulnerabilities for specific packages.
+    PURLs are standardized identifiers for software packages across different
+    ecosystems (PyPI, npm, Maven, etc.).
+
     Examples:
         cvec search "linux kernel"                    # Fuzzy search (default)
         cvec search "linux" --mode strict             # Exact match only
@@ -765,6 +780,8 @@ def search(
         cvec search "windows" -V microsoft            # Filter by vendor
         cvec search "chrome" -p browser               # Filter by product
         cvec search --cwe 787                         # Search by CWE ID
+        cvec search --purl "pkg:pypi/django"          # Search by PURL
+        cvec search --purl "pkg:npm/lodash"           # npm package
         cvec search "apache" --cvss-min 7.0           # CVSS >= 7.0
         cvec search "linux" --sort date               # Sort by date (descending by default)
         cvec search "linux" --sort cvss --order ascending  # Sort by CVSS ascending
@@ -775,8 +792,15 @@ def search(
     config = Config()
     service = CVESearchService(config)
 
+    # PURL search takes precedence (after CPE)
+    if purl:
+        try:
+            result = service.by_purl(purl, check_version=version)
+        except ValueError as e:
+            console.print(f"[red]Error: {e}[/red]")
+            raise typer.Exit(1)
     # CPE search takes precedence
-    if cpe:
+    elif cpe:
         try:
             result = service.by_cpe(cpe, check_version=version)
         except ValueError as e:
@@ -805,7 +829,7 @@ def search(
         # Validate non-empty query when not using filters
         if not query or not query.strip():
             console.print(
-                "[red]Error: Search query, --product, --vendor, --cpe, or --cwe option required.[/red]"
+                "[red]Error: Search query, --product, --vendor, --cpe, --purl, or --cwe option required.[/red]"
             )
             raise typer.Exit(1)
 

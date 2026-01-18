@@ -20,8 +20,9 @@ import concurrent.futures
 import json
 import os
 import sys
+import traceback
 from pathlib import Path
-from typing import Any, Iterable, List, NamedTuple, Optional
+from typing import Any, Iterable, List, NamedTuple, Optional, Union
 
 import polars as pl
 from pydantic import BaseModel
@@ -195,6 +196,7 @@ class CVEProduct(BaseModel):
     platforms: Optional[str] = None  # comma-separated
     default_status: Optional[str] = None
     cpes: Optional[str] = None  # comma-separated CPE strings
+    package_url: Optional[str] = None  # Package URL (PURL) identifier
 
 
 class CVEVersion(BaseModel):
@@ -266,6 +268,19 @@ class ExtractedData(NamedTuple):
     references: List[CVEReference]
     credits: List[CVECredit]
     tags: List[CVETag]
+
+
+class ExtractionError(NamedTuple):
+    """Information about a CVE that failed to extract."""
+
+    cve_id: str
+    file_path: str
+    error_type: str
+    error_message: str
+
+
+# Type alias for process result
+ProcessResult = Union[ExtractedData, ExtractionError]
 
 
 # =============================================================================
@@ -651,6 +666,11 @@ def _extract_products_and_versions(
             cpe_list = [_get_value(c) for c in _get_iterable(prod.cpes)]
             cpes = ",".join([c for c in cpe_list if c])
 
+        # Package URL (PURL)
+        package_url = None
+        if hasattr(prod, "packageURL") and prod.packageURL:
+            package_url = _get_value(prod.packageURL)
+
         products.append(
             CVEProduct(
                 cve_id=cve_id,
@@ -667,6 +687,7 @@ def _extract_products_and_versions(
                 platforms=platforms,
                 default_status=default_status,
                 cpes=cpes,
+                package_url=package_url,
             )
         )
 
@@ -1146,16 +1167,29 @@ def _extract_single_cve(cve: CveJsonRecordFormat) -> ExtractedData:
     )
 
 
-def _process_file(args: tuple) -> Optional[ExtractedData]:
-    """Process a single CVE file."""
+def _process_file(args: tuple) -> ProcessResult:
+    """Process a single CVE file.
+
+    Returns ExtractedData on success, ExtractionError on failure.
+    """
     year, file_path = args
     try:
         with open(file_path, "r", encoding="utf-8") as f:
             cve_data = json.load(f)
         cve_model = CveJsonRecordFormat.model_validate(cve_data)
         return _extract_single_cve(cve_model)
-    except Exception:
-        return None
+    except Exception as e:
+        # Extract CVE ID from file path
+        cve_id = os.path.basename(file_path).replace(".json", "")
+        error_type = type(e).__name__
+        # Truncate error message if too long
+        error_message = str(e)[:500]
+        return ExtractionError(
+            cve_id=cve_id,
+            file_path=str(file_path),
+            error_type=error_type,
+            error_message=error_message,
+        )
 
 
 # =============================================================================
@@ -1244,6 +1278,7 @@ PRODUCT_SCHEMA = {
     "platforms": pl.Utf8,
     "default_status": pl.Utf8,
     "cpes": pl.Utf8,
+    "package_url": pl.Utf8,
 }
 
 VERSION_SCHEMA = {
@@ -1375,6 +1410,7 @@ class ExtractorService:
         references: List[CVEReference] = []
         credits_list: List[CVECredit] = []
         tags: List[CVETag] = []
+        extraction_errors: List[ExtractionError] = []
 
         with concurrent.futures.ProcessPoolExecutor() as executor:
             if self.quiet:
@@ -1395,7 +1431,8 @@ class ExtractorService:
 
         # Aggregate results
         for result in results:
-            if result is None:
+            if isinstance(result, ExtractionError):
+                extraction_errors.append(result)
                 continue
             cve_records.append(result.cve)
             descriptions.extend(result.descriptions)
@@ -1406,6 +1443,37 @@ class ExtractorService:
             references.extend(result.references)
             credits_list.extend(result.credits)
             tags.extend(result.tags)
+
+        # Report extraction errors
+        if extraction_errors and not self.quiet:
+            print()
+            print(
+                f"[yellow]⚠ {len(extraction_errors)} CVEs failed to extract:[/yellow]"
+            )
+
+            # Group errors by error type
+            errors_by_type: dict[str, List[ExtractionError]] = {}
+            for err in extraction_errors:
+                key = err.error_type
+                if key not in errors_by_type:
+                    errors_by_type[key] = []
+                errors_by_type[key].append(err)
+
+            for error_type, errors in sorted(
+                errors_by_type.items(), key=lambda x: -len(x[1])
+            ):
+                print(f"  [{len(errors)}] {error_type}:")
+                # Show first few examples
+                for err in errors[:3]:
+                    print(f"      - {err.cve_id}")
+                if len(errors) > 3:
+                    print(f"      ... and {len(errors) - 3} more")
+                # Show one error message as sample
+                if errors:
+                    sample_msg = errors[0].error_message[:200]
+                    if len(errors[0].error_message) > 200:
+                        sample_msg += "..."
+                    print(f"      Sample error: {sample_msg}")
 
         # Write to Parquet
         results_paths = {}

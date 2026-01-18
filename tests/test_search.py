@@ -890,3 +890,84 @@ class TestSortResults:
 
         with pytest.raises(ValueError, match="Invalid sort order"):
             service.sort_results(result, "date", "invalid")
+
+
+class TestByPurl:
+    """Tests for PURL (Package URL) search functionality."""
+
+    def test_by_purl_exact_match(self, sample_parquet_data):
+        """by_purl should find CVEs with exact PURL match."""
+        service = CVESearchService(config=sample_parquet_data)
+        result = service.by_purl("pkg:pypi/django")
+
+        assert result.count >= 1
+        cve_ids = [c["cve_id"] for c in result.to_dicts()]
+        assert "CVE-2023-0001" in cve_ids
+
+    def test_by_purl_npm_package(self, sample_parquet_data):
+        """by_purl should find CVEs for npm packages."""
+        service = CVESearchService(config=sample_parquet_data)
+        result = service.by_purl("pkg:npm/lodash")
+
+        assert result.count >= 1
+        cve_ids = [c["cve_id"] for c in result.to_dicts()]
+        assert "CVE-2024-1234" in cve_ids
+
+    def test_by_purl_maven_package(self, sample_parquet_data):
+        """by_purl should find CVEs for Maven packages."""
+        service = CVESearchService(config=sample_parquet_data)
+        result = service.by_purl("pkg:maven/org.apache.xmlgraphics/batik-anim")
+
+        assert result.count >= 1
+        cve_ids = [c["cve_id"] for c in result.to_dicts()]
+        assert "CVE-2024-9999" in cve_ids
+
+    def test_by_purl_fuzzy_match(self, sample_parquet_data):
+        """by_purl with fuzzy=True should find partial matches."""
+        service = CVESearchService(config=sample_parquet_data)
+        # Search for just "pypi" - should match any pypi package
+        result = service.by_purl("pypi", fuzzy=True)
+
+        assert result.count >= 1
+        cve_ids = [c["cve_id"] for c in result.to_dicts()]
+        assert "CVE-2023-0001" in cve_ids
+
+    def test_by_purl_not_found(self, sample_parquet_data):
+        """by_purl should return empty result for non-existent PURL."""
+        service = CVESearchService(config=sample_parquet_data)
+        result = service.by_purl("pkg:cargo/nonexistent-package")
+
+        assert result.count == 0
+
+    def test_by_purl_empty_raises_error(self, sample_parquet_data):
+        """by_purl should raise ValueError for empty PURL."""
+        service = CVESearchService(config=sample_parquet_data)
+
+        with pytest.raises(ValueError, match="cannot be empty"):
+            service.by_purl("")
+
+    def test_by_purl_invalid_format_raises_error(self, sample_parquet_data):
+        """by_purl should raise ValueError for invalid PURL format."""
+        service = CVESearchService(config=sample_parquet_data)
+
+        with pytest.raises(ValueError, match="Invalid PURL format"):
+            service.by_purl("not-a-valid-purl")
+
+    def test_by_purl_case_insensitive(self, sample_parquet_data):
+        """by_purl should match case-insensitively."""
+        service = CVESearchService(config=sample_parquet_data)
+        result = service.by_purl("PKG:PYPI/DJANGO")
+
+        assert result.count >= 1
+        cve_ids = [c["cve_id"] for c in result.to_dicts()]
+        assert "CVE-2023-0001" in cve_ids
+
+    def test_by_purl_prefix_match(self, sample_parquet_data):
+        """by_purl should match PURL prefixes."""
+        service = CVESearchService(config=sample_parquet_data)
+        # Match just the package type and namespace prefix
+        result = service.by_purl("pkg:maven/org.apache")
+
+        assert result.count >= 1
+        cve_ids = [c["cve_id"] for c in result.to_dicts()]
+        assert "CVE-2024-9999" in cve_ids

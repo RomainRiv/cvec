@@ -213,6 +213,67 @@ SAMPLE_CVE_WITH_ADP = {
     },
 }
 
+# CVE with Package URL (PURL)
+SAMPLE_CVE_WITH_PURL = {
+    "dataType": "CVE_RECORD",
+    "dataVersion": "5.2",
+    "cveMetadata": {
+        "cveId": "CVE-2024-5678",
+        "assignerOrgId": "14ed7db2-4595-443d-9d34-6215bf890778",
+        "state": "PUBLISHED",
+        "assignerShortName": "test",
+        "datePublished": "2024-07-15T00:00:00.000Z",
+    },
+    "containers": {
+        "cna": {
+            "affected": [
+                {
+                    "product": "requests",
+                    "vendor": "Python",
+                    "packageURL": "pkg:pypi/requests",
+                    "versions": [
+                        {
+                            "lessThan": "2.32.0",
+                            "status": "affected",
+                            "version": "0",
+                            "versionType": "semver",
+                        }
+                    ],
+                }
+            ],
+            "descriptions": [
+                {
+                    "lang": "en",
+                    "value": "Security vulnerability in Python requests library",
+                }
+            ],
+            "metrics": [
+                {
+                    "cvssV3_1": {
+                        "attackComplexity": "LOW",
+                        "attackVector": "NETWORK",
+                        "availabilityImpact": "NONE",
+                        "baseScore": 6.1,
+                        "baseSeverity": "MEDIUM",
+                        "confidentialityImpact": "LOW",
+                        "integrityImpact": "LOW",
+                        "privilegesRequired": "NONE",
+                        "scope": "CHANGED",
+                        "userInteraction": "REQUIRED",
+                        "vectorString": "CVSS:3.1/AV:N/AC:L/PR:N/UI:R/S:C/C:L/I:L/A:N",
+                        "version": "3.1",
+                    }
+                }
+            ],
+            "providerMetadata": {
+                "orgId": "14ed7db2-4595-443d-9d34-6215bf890778",
+                "shortName": "test",
+            },
+            "references": [{"url": "https://github.com/psf/requests/security"}],
+        }
+    },
+}
+
 
 # =============================================================================
 # Fixtures
@@ -250,6 +311,7 @@ def sample_cve_files(temp_config: Config) -> Config:
         (SAMPLE_CVE_TEXT_SEVERITY, "2016"),
         (SAMPLE_CVE_NO_SEVERITY, "2023"),
         (SAMPLE_CVE_WITH_ADP, "2024"),
+        (SAMPLE_CVE_WITH_PURL, "2024"),
     ]:
         year_dir = temp_config.cve_dir / year
         year_dir.mkdir(parents=True, exist_ok=True)
@@ -480,6 +542,7 @@ def sample_parquet_data(temp_config: Config) -> Config:
             "repo": None,
             "default_status": "unaffected",
             "source": "cna",
+            "package_url": None,
         },
         {
             "cve_id": "CVE-2016-7054",
@@ -495,6 +558,7 @@ def sample_parquet_data(temp_config: Config) -> Config:
             "repo": None,
             "default_status": None,
             "source": "cna",
+            "package_url": None,
         },
         {
             "cve_id": "CVE-2023-0001",
@@ -510,6 +574,7 @@ def sample_parquet_data(temp_config: Config) -> Config:
             "repo": None,
             "default_status": None,
             "source": "cna",
+            "package_url": "pkg:pypi/django",
         },
         {
             "cve_id": "CVE-2024-1234",
@@ -525,6 +590,7 @@ def sample_parquet_data(temp_config: Config) -> Config:
             "repo": None,
             "default_status": None,
             "source": "cna",
+            "package_url": "pkg:npm/lodash",
         },
         # Product with regex special characters for exact matching test
         {
@@ -541,6 +607,7 @@ def sample_parquet_data(temp_config: Config) -> Config:
             "repo": None,
             "default_status": None,
             "source": "cna",
+            "package_url": "pkg:maven/org.apache.xmlgraphics/batik-anim",
         },
     ]
     products_df = pl.DataFrame(products_data)

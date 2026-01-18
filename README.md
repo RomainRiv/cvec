@@ -115,6 +115,12 @@ cvec search "windows" --before 2024-06-01
 # Filter by KEV (Known Exploited Vulnerabilities)
 cvec search "windows" --kev
 
+# Search by Package URL (PURL) - new in CVE schema 5.2
+cvec search --purl "pkg:pypi/django"
+cvec search --purl "pkg:npm/lodash"
+cvec search --purl "pkg:maven/org.apache.xmlgraphics/batik-anim"
+cvec search --purl "pkg:github/package-url/purl-spec"
+
 # Sort results
 cvec search "linux" --sort date          # Sort by date (descending by default)
 cvec search "linux" --sort date --order ascending   # Sort by date, oldest first

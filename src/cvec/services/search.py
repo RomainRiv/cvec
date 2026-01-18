@@ -605,6 +605,97 @@ class CVESearchService:
 
         return search_result
 
+    def by_purl(
+        self,
+        purl: str,
+        check_version: Optional[str] = None,
+        fuzzy: bool = False,
+    ) -> SearchResult:
+        """Search CVEs by Package URL (PURL).
+
+        Package URLs (PURLs) are a standardized way to identify and locate
+        software packages across different package managers and ecosystems.
+
+        Format: pkg:<type>/<namespace>/<name>@<version>?<qualifiers>#<subpath>
+        Example: pkg:npm/%40angular/animation, pkg:pypi/django, pkg:maven/org.apache.xmlgraphics/batik-anim
+
+        Args:
+            purl: Package URL string or partial PURL to search for.
+                The PURL should NOT include a version per the CVE specification.
+                Examples:
+                - pkg:npm/lodash
+                - pkg:pypi/django
+                - pkg:maven/org.apache.xmlgraphics/batik-anim
+                - pkg:github/package-url/purl-spec
+            check_version: Optional version to check. If provided, only returns
+                CVEs where this version falls within the affected range.
+            fuzzy: If True, use substring matching. If False (default), match
+                the PURL exactly or as a prefix.
+
+        Returns:
+            SearchResult with matching CVEs.
+
+        Raises:
+            ValueError: If the PURL string is empty or invalid.
+        """
+        cves_df = self._ensure_cves_loaded()
+
+        if self._products_df is None:
+            return SearchResult(pl.DataFrame(schema=cves_df.schema))
+
+        # Validate PURL format (basic validation)
+        purl = purl.strip()
+        if not purl:
+            raise ValueError("PURL string cannot be empty.")
+
+        # Check for valid PURL prefix (case-insensitive)
+        if not purl.lower().startswith("pkg:") and not fuzzy:
+            raise ValueError(
+                f"Invalid PURL format: {purl}. "
+                "Expected format: pkg:<type>/<namespace>/<name> "
+                "(e.g., pkg:npm/lodash, pkg:pypi/django)"
+            )
+
+        # Search in products table for matching package_url
+        if fuzzy:
+            # Case-insensitive substring matching
+            purl_lower = purl.lower()
+            purl_filter = (
+                pl.col("package_url")
+                .fill_null("")
+                .str.to_lowercase()
+                .str.contains(purl_lower, literal=True)
+            )
+        else:
+            # Exact match or prefix match (for PURLs without version)
+            purl_lower = purl.lower()
+            purl_filter = (
+                pl.col("package_url").fill_null("").str.to_lowercase() == purl_lower
+            ) | (
+                pl.col("package_url")
+                .fill_null("")
+                .str.to_lowercase()
+                .str.starts_with(purl_lower)
+            )
+
+        matching_products = self._products_df.filter(purl_filter)
+        cve_ids = matching_products.get_column("cve_id").unique().to_list()
+
+        result = cves_df.filter(pl.col("cve_id").is_in(cve_ids))
+        result = result.sort("date_published", descending=True)
+        related = self._get_related_data(cve_ids)
+
+        search_result = SearchResult(result, **related)
+
+        # If a version was specified, filter by version applicability
+        if check_version and search_result.count > 0:
+            search_result = self.filter_by_version(
+                search_result,
+                version=check_version,
+            )
+
+        return search_result
+
     def filter_by_version(
         self,
         result: SearchResult,
